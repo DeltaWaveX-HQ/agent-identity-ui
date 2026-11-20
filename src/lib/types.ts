@@ -29,6 +29,7 @@ export interface AgentAccessTokenClaims {
     model: string;
   };
   act?: ActorClaim;
+  user_agent_hierarchy?: Record<string, unknown>;
 }
 
 export interface DPoPClaims {
