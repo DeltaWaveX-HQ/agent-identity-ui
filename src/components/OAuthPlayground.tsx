@@ -549,7 +549,7 @@ export default function OAuthPlayground({
                     {gwResult.allowed ? "ALLOWED" : "BLOCKED / STEP-UP"}
                   </span>
                 </div>
-                {gwResult.gateway_latency_us && (
+                {Boolean(gwResult.gateway_latency_us) && (
                   <span className="font-mono text-xs text-slate-300">
                     {String(gwResult.gateway_latency_us)} µs
                   </span>
