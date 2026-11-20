@@ -1,0 +1,20 @@
+# Continuous deployment (Cloud Build trigger on push). Builds the console with the API URL baked
+# in (Next.js NEXT_PUBLIC_*) and rolls the agentid-console service onto it.
+substitutions:
+  _REGION: asia-south1
+  _REPO: agentid
+  _API_URL: "" # set on the trigger: the agentid-api service URL
+options:
+  logging: CLOUD_LOGGING_ONLY
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "--build-arg", "NEXT_PUBLIC_API_URL=${_API_URL}", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/console:$SHORT_SHA", "."]
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/console:$SHORT_SHA"]
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ["run", "deploy", "agentid-console", "--image", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/console:$SHORT_SHA", "--region", "${_REGION}", "--quiet"]
+images: ["${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/console:$SHORT_SHA"]
