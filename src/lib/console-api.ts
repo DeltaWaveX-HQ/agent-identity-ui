@@ -140,6 +140,14 @@ export interface Connections {
   upstreams?: { Name: string; Description: string; Transport: string; Error: string; Tools: string[] | null }[];
 }
 
+export interface HookKeyInfo {
+  exists?: boolean;
+  key?: string; // only right after creation
+  prefix?: string;
+  created_at?: number;
+  attribution_url: string;
+}
+
 // ---------- console session ----------
 
 /** localStorage key holding { user, org, token } after sign-in. */
@@ -211,6 +219,10 @@ export const consoleApi = {
 
   // EventSource cannot send headers, so the stream takes the session in the query string.
   eventStreamUrl: () => `${GO_API_BASE}/api/v1/events/stream?access_token=${encodeURIComponent(sessionToken())}`,
+
+  // Sub-agent hook key (Claude Code PreToolUse hook -> hosted gateway)
+  hookKey: () => get<HookKeyInfo>("/api/v1/console/hook-key"),
+  createHookKey: () => post<HookKeyInfo>("/api/v1/console/hook-key", {}),
 
   // Session
   me: () => get<{ user: unknown; organization: unknown }>("/api/v1/auth/me"),

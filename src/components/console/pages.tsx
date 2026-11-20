@@ -9,6 +9,7 @@ import {
   Approval,
   Connections,
   Grant,
+  HookKeyInfo,
   Overview,
   Policy,
   consoleApi,
@@ -804,6 +805,68 @@ export function PoliciesPage({ refreshKey, onChanged }: { refreshKey: number; on
 // Connect an agent + connected tools
 // =============================================================================================
 
+/** Claude Code runs sub-agents over the parent's connection; its hook tells the gateway which one is calling. */
+function SubAgentHookCard({ refreshKey }: { refreshKey: number }) {
+  const { data } = useData<HookKeyInfo>(consoleApi.hookKey, refreshKey);
+  const [created, setCreated] = useState<HookKeyInfo | null>(null);
+  const [server, setServer] = useState("agent-gw");
+  const info = created || data;
+  const key = created?.key;
+  const url = info?.attribution_url || "";
+  const name = server.trim() || "agent-gw";
+  const hook = key
+    ? JSON.stringify(
+        {
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: `mcp__${name}__.*`,
+                hooks: [
+                  {
+                    type: "command",
+                    command: `curl -s -m 3 -X POST ${url} -H 'Authorization: Bearer ${key}' -H 'Content-Type: application/json' --data-binary @- >/dev/null 2>&1; exit 0`,
+                    timeout: 5,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )
+    : "";
+  return (
+    <Card title="Detect Claude Code sub-agents">
+      <p className="mb-3 text-sm text-slate-600">
+        When Claude Code spawns a sub-agent (&ldquo;create an agent and…&rdquo;), the sub-agent uses the parent&rsquo;s connection. A small Claude Code hook tells the gateway which
+        agent is calling, so each sub-agent appears under its parent with its own approval and time limit. Your key only works for your own sessions.
+      </p>
+      {info?.exists && !key && (
+        <p className="mb-3 text-sm text-slate-600">
+          Key <Mono>{info.prefix}…</Mono> created {info.created_at ? relTime(new Date(info.created_at * 1000).toISOString()) : ""}. Creating a new key stops the old one.
+        </p>
+      )}
+      {!key && (
+        <Button variant="primary" onClick={() => runAction(async () => setCreated(await consoleApi.createHookKey()), "Hook key created. Copy it now: it is shown only once.")}>
+          {info?.exists ? "Replace key" : "Create hook key"}
+        </Button>
+      )}
+      {key && (
+        <div className="space-y-3 text-sm text-slate-700">
+          <label className="block">
+            <span className="text-xs font-medium text-slate-500">Name you gave the gateway in Claude Code</span>
+            <input value={server} onChange={(e) => setServer(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 font-mono text-xs" />
+          </label>
+          <div>Add this to <code className="rounded bg-slate-100 px-1">~/.claude/settings.json</code> (merge into any existing <code>hooks</code>), then restart Claude Code:</div>
+          <CopyBlock text={hook} />
+          <p className="text-xs text-amber-700">This key is shown only once. It is stored only as a hash.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function ConnectPage({ refreshKey }: { refreshKey: number }) {
   const { data, error } = useData<Connections>(consoleApi.connections, refreshKey);
   if (!data) return <Loading error={error} />;
@@ -827,6 +890,7 @@ export function ConnectPage({ refreshKey }: { refreshKey: number }) {
             <p className="mb-3 text-sm text-slate-600">A sub-agent connects to its own address. On its consent screen you pick the parent agent, a subset of the parent's permissions, and 5 minutes, 10 minutes or 1 hour.</p>
             <CopyBlock text={`claude mcp add --transport http -s user agent-gw-researcher ${mcp}/sub/researcher`} />
           </Card>
+          <SubAgentHookCard refreshKey={refreshKey} />
           <Card title="Other MCP clients">
             <p className="text-sm text-slate-600">
               Cursor, Gemini CLI, MCPJam and other clients that support remote MCP with OAuth: use <code className="rounded bg-slate-100 px-1">{mcp}</code> with the HTTP transport. ChatGPT and Claude.ai connectors need a public HTTPS address, which comes with deployment.
