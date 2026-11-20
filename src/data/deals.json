@@ -1,0 +1,130 @@
+[
+  {
+    "id": "cyberark",
+    "buyer": "Palo Alto Networks",
+    "target": "CyberArk",
+    "month": "2026-02",
+    "area": "Identity & privileged access",
+    "price_musd": 25000
+  },
+  {
+    "id": "protectai",
+    "buyer": "Palo Alto Networks",
+    "target": "Protect AI",
+    "month": "2025-07",
+    "area": "AI runtime security",
+    "price_musd": 634.5
+  },
+  {
+    "id": "veza",
+    "buyer": "ServiceNow",
+    "target": "Veza",
+    "month": "2026-03",
+    "area": "Identity access graph",
+    "price_musd": 1200
+  },
+  {
+    "id": "sgnl",
+    "buyer": "CrowdStrike",
+    "target": "SGNL",
+    "month": "2026-01",
+    "area": "Runtime identity",
+    "price_musd": 740
+  },
+  {
+    "id": "oasis",
+    "buyer": "Cyera",
+    "target": "Oasis Security",
+    "month": "2026-09",
+    "area": "Agent / non-human identity",
+    "price_musd": 1000
+  },
+  {
+    "id": "astrix",
+    "buyer": "Cisco",
+    "target": "Astrix Security",
+    "month": "2026-06",
+    "area": "Agent / non-human identity",
+    "price_musd": 400
+  },
+  {
+    "id": "entro",
+    "buyer": "SailPoint",
+    "target": "Entro Security",
+    "month": "2026-06",
+    "area": "Agent / non-human identity",
+    "price_musd": null
+  },
+  {
+    "id": "permiso",
+    "buyer": "Okta",
+    "target": "Permiso",
+    "month": "2026-08",
+    "area": "Agent behaviour detection",
+    "price_musd": null
+  },
+  {
+    "id": "stytch",
+    "buyer": "Twilio",
+    "target": "Stytch",
+    "month": "2025-11",
+    "area": "Developer auth incl. agents",
+    "price_musd": 104.1
+  },
+  {
+    "id": "natoma",
+    "buyer": "Snowflake",
+    "target": "Natoma",
+    "month": "2026-05",
+    "area": "MCP governance",
+    "price_musd": null
+  },
+  {
+    "id": "lakera",
+    "buyer": "Check Point",
+    "target": "Lakera",
+    "month": "2025-09",
+    "area": "AI runtime guard",
+    "price_musd": 300
+  },
+  {
+    "id": "calypso",
+    "buyer": "F5",
+    "target": "CalypsoAI",
+    "month": "2025-09",
+    "area": "AI guardrails",
+    "price_musd": 180
+  },
+  {
+    "id": "prompt",
+    "buyer": "SentinelOne",
+    "target": "Prompt Security",
+    "month": "2025-08",
+    "area": "AI firewall",
+    "price_musd": null
+  },
+  {
+    "id": "aim",
+    "buyer": "Cato Networks",
+    "target": "Aim Security",
+    "month": "2025-09",
+    "area": "AI security",
+    "price_musd": null
+  },
+  {
+    "id": "invariant",
+    "buyer": "Snyk",
+    "target": "Invariant Labs",
+    "month": "2025-06",
+    "area": "MCP / agent guardrails",
+    "price_musd": null
+  },
+  {
+    "id": "fabrix",
+    "buyer": "Silverfort",
+    "target": "Fabrix",
+    "month": "2026-04",
+    "area": "Runtime access decisions",
+    "price_musd": null
+  }
+]

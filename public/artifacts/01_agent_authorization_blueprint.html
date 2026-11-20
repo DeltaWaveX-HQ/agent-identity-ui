@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Agent Authorization Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+/* Layout: an engineering blueprint — one reading column of sections, with two wide "instrument" panels (architecture map, live login trace) that break out to full width. */
+:root{
+  --bg:#F5F7FA; --panel:#FFFFFF; --ink:#132030; --muted:#5A6A7D; --line:#D6DEE8; --soft:#EAF0F7;
+  --accent:#2350D8; --accent-soft:#E3EAFD; --ok:#1C7D52; --ok-soft:#E0F2EA; --warn:#A86A12; --warn-soft:#FBF0DC; --bad:#BC3B26; --bad-soft:#FBE6E1;
+  --code-bg:#0F1A27; --code-fg:#D7E3F1; --code-key:#8FB4FF; --code-str:#9AD9B5;
+  --display:"Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D131B; --panel:#141C27; --ink:#E4EBF3; --muted:#93A3B6; --line:#26323F; --soft:#1A2431;
+  --accent:#7D9BFF; --accent-soft:#1D2A4A; --ok:#5BCB95; --ok-soft:#12291F; --warn:#E3A84A; --warn-soft:#2E2412; --bad:#F07C66; --bad-soft:#331915;
+  --code-bg:#0A1018; --code-fg:#D7E3F1; --code-key:#8FB4FF; --code-str:#9AD9B5; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D131B; --panel:#141C27; --ink:#E4EBF3; --muted:#93A3B6; --line:#26323F; --soft:#1A2431;
+  --accent:#7D9BFF; --accent-soft:#1D2A4A; --ok:#5BCB95; --ok-soft:#12291F; --warn:#E3A84A; --warn-soft:#2E2412; --bad:#F07C66; --bad-soft:#331915;
+  --code-bg:#0A1018; --code-fg:#D7E3F1; --code-key:#8FB4FF; --code-str:#9AD9B5; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:28px 64px}
+.wrap{max-width:72rem;margin-inline:auto;display:flex;flex-direction:column;gap:56px}
+.read{max-width:44rem}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(2rem, 4.5vw, 3rem);line-height:1.05;font-weight:700}
+h2{font-size:1.6rem;font-weight:700;line-height:1.15}
+h3{font-size:1.05rem;font-weight:700}
+p{margin:0}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.lede{color:var(--muted);font-size:1.05rem;max-width:44rem}
+.muted{color:var(--muted)}
+.small{font-size:.82rem}
+code,.mono{font-family:var(--mono);font-size:.86em}
+section{display:flex;flex-direction:column;gap:18px}
+.sec-head{display:flex;flex-direction:column;gap:6px}
+.tag{display:inline-block;font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);vertical-align:middle}
+.tag.prop{border-color:var(--warn);color:var(--warn)}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:14px}
+.layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:12px;margin-top:6px}
+.layer{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.layer b{font-family:var(--display);font-size:1.05rem}
+.layer span{color:var(--muted);font-size:.88rem}
+.layer i{font-style:normal;font-family:var(--mono);font-size:.7rem;color:var(--accent);letter-spacing:.08em}
+
+/* instrument panels */
+.instrument{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+svg text{font-family:var(--body)}
+.arch .box rect{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.arch .box text{fill:var(--ink);font-size:13px;font-weight:600}
+.arch .box text.sub{fill:var(--muted);font-size:11px;font-weight:400}
+.arch .box{cursor:pointer;outline:none}
+.arch .box:hover rect,.arch .box:focus-visible rect{stroke:var(--accent)}
+.arch .box.sel rect{stroke:var(--accent);stroke-width:2.5;fill:var(--accent-soft)}
+.arch .zone{fill:var(--soft);stroke:var(--line);stroke-dasharray:5 4}
+.arch .zone-label{fill:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.1em}
+.arch .edge{stroke:var(--muted);stroke-width:1.4;fill:none}
+.arch .edge.hot{stroke:var(--accent);stroke-width:2}
+.arch .elabel{fill:var(--muted);font-size:10.5px}
+.arch .arrowhead{fill:var(--muted)}
+.arch .arrowhead-hot{fill:var(--accent)}
+@media (prefers-reduced-motion: no-preference){
+  .arch .edge.flow{stroke-dasharray:6 6;animation:dash 1.6s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-24}}
+}
+.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;border-top:1px solid var(--line);padding-top:14px}
+.detail h3{margin-bottom:4px}
+.detail ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.detail .std{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+@media (max-width:720px){.detail{grid-template-columns:1fr}}
+
+/* login trace */
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-size:.85rem;font-weight:500;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.icon{width:2.3rem;padding:7px 0;text-align:center}
+.spacer{flex:1}
+.stepcount{font-family:var(--mono);font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.trace{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.trace{grid-template-columns:1fr}}
+.seq .lane-head rect{fill:var(--soft);stroke:var(--line)}
+.seq .lane-head text{fill:var(--ink);font-size:12px;font-weight:600}
+.seq .lane-line{stroke:var(--line);stroke-width:1.5;stroke-dasharray:3 4}
+.seq .msg line{stroke:var(--muted);stroke-width:1.5}
+.seq .msg text{fill:var(--muted);font-size:11.5px}
+.seq .msg .num{fill:var(--muted);font-family:var(--mono);font-size:10px}
+.seq .msg.future{opacity:.28}
+.seq .msg.cur line{stroke:var(--accent);stroke-width:2.5}
+.seq .msg.cur text{fill:var(--ink);font-weight:600}
+.seq .msg.cur .num{fill:var(--accent)}
+.seq .msg.bad line{stroke:var(--bad)}
+.seq .msg.bad text{fill:var(--bad)}
+.seq .msg.good.cur line{stroke:var(--ok)}
+.seq .ah{fill:var(--muted)}
+.seq .ah-cur{fill:var(--accent)}
+.seq .ah-bad{fill:var(--bad)}
+.seq .ah-good{fill:var(--ok)}
+.seq .dot{fill:var(--accent)}
+.seq .row-hit{fill:transparent;cursor:pointer}
+.panel{border:1px solid var(--line);border-radius:var(--r);background:var(--bg);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel .who{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.panel h3{font-size:1.15rem}
+.panel .plain{font-size:.95rem}
+.panel .hood{font-size:.84rem;color:var(--muted);border-left:2px solid var(--line);padding-left:10px}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;align-self:flex-start}
+.status.ok{background:var(--ok-soft);color:var(--ok)}
+.status.warn{background:var(--warn-soft);color:var(--warn)}
+.status.bad{background:var(--bad-soft);color:var(--bad)}
+.status.info{background:var(--accent-soft);color:var(--accent)}
+pre.token{margin:0;background:var(--code-bg);color:var(--code-fg);border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:.74rem;line-height:1.5;overflow-x:auto;white-space:pre}
+pre.token .k{color:var(--code-key)}
+pre.token .s{color:var(--code-str)}
+.token-cap{font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.progress{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s ease}
+
+/* flowchart */
+.flow{display:flex;flex-direction:column;align-items:center;gap:0}
+.fnode{position:relative;max-width:30rem;width:100%;border:1.5px solid var(--line);background:var(--panel);border-radius:var(--r);padding:10px 14px;display:flex;gap:12px;align-items:flex-start;transition:border-color .3s, box-shadow .3s, background .3s}
+.fnode.dec{border-style:dashed}
+.fnode .fi{font-family:var(--mono);font-size:.72rem;color:var(--muted);min-width:1.6rem;padding-top:2px}
+.fnode b{display:block;font-size:.95rem}
+.fnode span{display:block;color:var(--muted);font-size:.82rem}
+.fnode.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 4px var(--accent-soft)}
+.fnode.on.badn{border-color:var(--bad);background:var(--bad-soft);box-shadow:0 0 0 4px var(--bad-soft)}
+.fnode.done{border-color:var(--ok)}
+.fconn{width:2px;height:18px;background:var(--line);position:relative}
+.fconn::after{content:"";position:absolute;bottom:-4px;left:-4px;border:5px solid transparent;border-top-color:var(--line);border-bottom:0}
+.branches{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.br{font-size:.74rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.br.ok{border-color:var(--ok);color:var(--ok)}
+.br.warn{border-color:var(--warn);color:var(--warn)}
+.br.bad{border-color:var(--bad);color:var(--bad)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:860px){.two{grid-template-columns:1fr}}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{text-align:left;font-weight:600;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);background:var(--soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.mono,td code{font-family:var(--mono);font-size:.8rem;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* cards grid */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:12px}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.card .k{font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.card p{font-size:.9rem;color:var(--muted)}
+.card ul{margin:0;padding-left:18px;font-size:.88rem;display:flex;flex-direction:column;gap:3px}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;counter-reset:p}
+.pipe .st{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:12px;position:relative;min-width:0}
+.pipe .st b{display:block;font-size:.92rem;margin-bottom:4px}
+.pipe .st span{display:block;font-size:.82rem;color:var(--muted)}
+.pipe .st em{font-style:normal;font-family:var(--mono);font-size:.7rem;color:var(--accent)}
+@media (max-width:860px){.pipe{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.pipe{grid-template-columns:1fr}}
+.tiers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.tiers{grid-template-columns:1fr}}
+.tier{border-radius:var(--r);padding:12px 14px;border:1px solid var(--line)}
+.tier.ok{background:var(--ok-soft);border-color:var(--ok)}
+.tier.warn{background:var(--warn-soft);border-color:var(--warn)}
+.tier.bad{background:var(--bad-soft);border-color:var(--bad)}
+.tier b{display:block;font-family:var(--display);font-size:1.05rem}
+.tier .range{font-family:var(--mono);font-size:.78rem}
+.tier p{font-size:.86rem;margin-top:4px}
+ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.note{border:1px dashed var(--warn);border-radius:var(--r);padding:12px 14px;font-size:.88rem;color:var(--muted);background:var(--warn-soft)}
+.note b{color:var(--warn)}
+footer{color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);padding-top:16px}
+footer a{color:inherit}
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Product design · v0.1 draft · 22 Oct 2026</span>
+    <h1>Agent Authorization Blueprint</h1>
+    <p class="lede">How every AI agent gets its own identity, asks the user for permission, carries a short-lived pass, and is checked by a risk model before each action. This is a proposed design for the founder to edit. Numbers marked <span class="tag prop">proposed</span> are starting defaults, not tested values.</p>
+    <div class="layers">
+      <div class="layer"><i>Layer 1</i><b>Identity &amp; consent</b><span>OAuth 2.1 authorization server. Each agent and sub-agent gets its own short-lived, scoped token, approved by the user.</span></div>
+      <div class="layer"><i>Layer 2</i><b>Enforcement gateway</b><span>The agent's only route to tools and the network. Every call is checked against the token and policy.</span></div>
+      <div class="layer"><i>Layer 3</i><b>Risk engine</b><span>Scores the agent when it asks for a token, and again on every action. High risk stops it or asks a human.</span></div>
+    </div>
+  </header>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture">
+    <div class="sec-head read">
+      <span class="eyebrow">01 · Architecture</span>
+      <h2>The system on one page</h2>
+      <p class="muted">Click any box to see what it does, what it stores and which standards it uses. Animated lines show the main request path: agent → gateway → resource.</p>
+    </div>
+    <div class="instrument arch">
+      <div class="scroll-x">
+        <svg id="archsvg" viewBox="0 0 960 600" width="100%" style="min-width:720px" role="img" aria-label="Architecture diagram">
+          <defs>
+            <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"></path></marker>
+            <marker id="mh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead-hot" d="M0,0 L10,5 L0,10 z"></path></marker>
+          </defs>
+          <rect class="zone" x="290" y="118" width="390" height="318" rx="14"></rect>
+          <text class="zone-label" x="306" y="138">CONTROL PLANE (OUR CLOUD OR CUSTOMER VPC)</text>
+          <rect class="zone" x="20" y="462" width="920" height="122" rx="14"></rect>
+          <text class="zone-label" x="36" y="482">DATA &amp; LEARNING</text>
+
+          <!-- edges -->
+          <path class="edge" d="M130 90 L130 168" marker-end="url(#m)"></path><text class="elabel" x="138" y="134">task</text>
+          <path class="edge" d="M230 60 L558 60 L558 156" marker-end="url(#m)"></path><text class="elabel" x="380" y="54">approves consent / CIBA push</text>
+          <path class="edge" d="M240 196 L318 196" marker-end="url(#m)"></path><text class="elabel" x="246" y="188">register, token</text>
+          <path class="edge" d="M410 156 L410 106 L825 106 L825 92" marker-end="url(#m)"></path><text class="elabel" x="590" y="100">federated user login (OIDC)</text>
+          <path class="edge" d="M395 226 L395 256" marker-end="url(#m)"></path>
+          <path class="edge" d="M470 191 L488 191" marker-end="url(#m)"></path>
+          <path class="edge hot flow" d="M240 236 L268 236 L268 452 L700 452 L700 260 L718 260" marker-end="url(#mh)"></path><text class="elabel" x="420" y="446">every tool / network call + token + DPoP proof</text>
+          <path class="edge" d="M718 228 L648 228 L648 288 L640 288" marker-end="url(#m)"></path><text class="elabel" x="652" y="248">decide</text>
+          <path class="edge hot flow" d="M820 274 L820 324" marker-end="url(#mh)"></path><text class="elabel" x="828" y="304">allowed only</text>
+          <path class="edge" d="M480 388 L688 388 L688 212 L718 212" marker-end="url(#m)"></path><text class="elabel" x="560" y="382">revocations, keys</text>
+          <path class="edge" d="M180 452 L180 504" marker-end="url(#m)"></path>
+          <path class="edge" d="M340 532 L378 532" marker-end="url(#m)"></path>
+          <path class="edge" d="M560 504 L560 476 L302 476 L302 293 L318 293" marker-end="url(#m)"></path><text class="elabel" x="420" y="471">deploy new model</text>
+          <path class="edge" d="M680 532 L700 532" marker-end="url(#m)"></path>
+
+          <!-- boxes -->
+          <g class="box" data-id="user" tabindex="0" role="button"><rect x="30" y="30" width="200" height="60" rx="10"></rect><text x="46" y="56">User</text><text class="sub" x="46" y="74">person who gives the task</text></g>
+          <g class="box" data-id="idp" tabindex="0" role="button"><rect x="720" y="30" width="210" height="60" rx="10"></rect><text x="736" y="56">Customer's login system</text><text class="sub" x="736" y="74">Okta / Entra / Ping (OIDC)</text></g>
+          <g class="box" data-id="runtime" tabindex="0" role="button"><rect x="30" y="168" width="210" height="96" rx="10"></rect><text x="46" y="194">Agent runtime + our SDK</text><text class="sub" x="46" y="214">agent, sub-agents, MCP client</text><text class="sub" x="46" y="232">holds tokens + DPoP key</text><text class="sub" x="46" y="250">attests its workload ID</text></g>
+          <g class="box" data-id="as" tabindex="0" role="button"><rect x="320" y="156" width="150" height="70" rx="10"></rect><text x="334" y="184">Auth server</text><text class="sub" x="334" y="204">OAuth 2.1 · tokens</text></g>
+          <g class="box" data-id="consent" tabindex="0" role="button"><rect x="490" y="156" width="170" height="70" rx="10"></rect><text x="504" y="184">Consent &amp; approvals</text><text class="sub" x="504" y="204">consent screen · CIBA</text></g>
+          <g class="box" data-id="risk" tabindex="0" role="button"><rect x="320" y="258" width="150" height="70" rx="10"></rect><text x="334" y="286">Risk engine</text><text class="sub" x="334" y="306">score agent + action</text></g>
+          <g class="box" data-id="policy" tabindex="0" role="button"><rect x="490" y="258" width="150" height="70" rx="10"></rect><text x="504" y="286">Policy engine</text><text class="sub" x="504" y="306">rules per tenant</text></g>
+          <g class="box" data-id="revoke" tabindex="0" role="button"><rect x="320" y="356" width="160" height="62" rx="10"></rect><text x="334" y="382">Keys &amp; revocation</text><text class="sub" x="334" y="400">JWKS · revoke bus</text></g>
+          <g class="box sel" data-id="gateway" tabindex="0" role="button"><rect x="720" y="168" width="210" height="106" rx="10"></rect><text x="736" y="194">Enforcement gateway</text><text class="sub" x="736" y="214">MCP / tool proxy</text><text class="sub" x="736" y="232">egress proxy (network)</text><text class="sub" x="736" y="250">checks token on every call</text></g>
+          <g class="box" data-id="resources" tabindex="0" role="button"><rect x="720" y="326" width="210" height="96" rx="10"></rect><text x="736" y="352">Resources</text><text class="sub" x="736" y="372">APIs, files, databases</text><text class="sub" x="736" y="390">SaaS apps, websites</text></g>
+          <g class="box" data-id="events" tabindex="0" role="button"><rect x="40" y="504" width="300" height="62" rx="10"></rect><text x="56" y="530">Event pipeline</text><text class="sub" x="56" y="548">Kafka → ClickHouse audit log</text></g>
+          <g class="box" data-id="training" tabindex="0" role="button"><rect x="380" y="504" width="300" height="62" rx="10"></rect><text x="396" y="530">Model training</text><text class="sub" x="396" y="548">features → XGBoost + sequence model</text></g>
+          <g class="box" data-id="console" tabindex="0" role="button"><rect x="702" y="504" width="228" height="62" rx="10"></rect><text x="718" y="530">Console &amp; audit</text><text class="sub" x="718" y="548">inventory, timeline, kill switch</text></g>
+        </svg>
+      </div>
+      <div class="detail" id="archdetail" aria-live="polite"><div><h3>Enforcement gateway</h3><ul><li>The only route from the agent to tools and the network.</li><li>Checks signature, expiry, audience, DPoP proof and revocation on every call.</li><li>Asks policy + risk, then forwards, asks a human, or blocks.</li><li>Blocks unknown destinations by default (egress).</li></ul></div><div><p><b>Stores</b></p><p class="muted">Short cache of keys and revocations (≤ 5 s).</p><p style="margin-top: 10px;"><b>Standards &amp; tech</b></p><p class="std">MCP gateway · HTTP egress proxy · RFC 9449</p></div></div>
+    </div>
+  </section>
+
+  <!-- LOGIN TRACE -->
+  <section id="login">
+    <div class="sec-head read">
+      <span class="eyebrow">02 · Login flow</span>
+      <h2>Watch an agent get its pass</h2>
+      <p class="muted">Each arrow is one message. Press play, or step through. Switch to <b>Risky action</b> to see the same agent get stopped and its tokens revoked. The panel shows the decoded token at each step.</p>
+    </div>
+    <div class="instrument">
+      <div class="controls">
+        <button class="btn" id="sc-normal" aria-pressed="true">Normal task</button>
+        <button class="btn" id="sc-risky" aria-pressed="false">Risky action</button>
+        <span class="spacer"></span>
+        <button class="btn icon" id="prev" aria-label="Previous step">‹</button>
+        <button class="btn" id="play" aria-label="Play or pause">▶ Play</button>
+        <button class="btn icon" id="next" aria-label="Next step">›</button>
+        <span class="stepcount" id="stepcount">17 / 17</span>
+      </div>
+      <div class="progress"><i id="prog" style="width: 100%;"></i></div>
+      <div class="trace">
+        <div class="scroll-x"><svg id="seq" class="seq" viewBox="0 0 900 631" width="100%" style="min-width:640px" role="img" aria-label="Login sequence diagram"><defs><marker id="seq-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"></path></marker><marker id="seq-ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-cur"></path></marker><marker id="seq-ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-bad"></path></marker><marker id="seq-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-good"></path></marker></defs><g class="lane-head"><rect x="13" y="8" width="124" height="28" rx="8"></rect><text x="75" y="27" text-anchor="middle">User</text></g><line class="lane-line" x1="75" x2="75" y1="38" y2="625"></line><g class="lane-head"><rect x="163" y="8" width="124" height="28" rx="8"></rect><text x="225" y="27" text-anchor="middle">Agent + SDK</text></g><line class="lane-line" x1="225" x2="225" y1="38" y2="625"></line><g class="lane-head"><rect x="313" y="8" width="124" height="28" rx="8"></rect><text x="375" y="27" text-anchor="middle">Auth server</text></g><line class="lane-line" x1="375" x2="375" y1="38" y2="625"></line><g class="lane-head"><rect x="463" y="8" width="124" height="28" rx="8"></rect><text x="525" y="27" text-anchor="middle">Risk engine</text></g><line class="lane-line" x1="525" x2="525" y1="38" y2="625"></line><g class="lane-head"><rect x="613" y="8" width="124" height="28" rx="8"></rect><text x="675" y="27" text-anchor="middle">Gateway</text></g><line class="lane-line" x1="675" x2="675" y1="38" y2="625"></line><g class="lane-head"><rect x="763" y="8" width="124" height="28" rx="8"></rect><text x="825" y="27" text-anchor="middle">Resource</text></g><line class="lane-line" x1="825" x2="825" y1="38" y2="625"></line><g class="msg" data-i="0"><line x1="79" x2="219" y1="72" y2="72" marker-end="url(#seq-a)"></line><text class="num" x="73" y="66" text-anchor="end">1</text><text x="85" y="66">Task request</text><rect class="row-hit" x="0" y="51.5" width="900" height="33"></rect></g><g class="msg" data-i="1"><line x1="229" x2="369" y1="105" y2="105" marker-end="url(#seq-a)"></line><text class="num" x="223" y="99" text-anchor="end">2</text><text x="235" y="99">Register + attest</text><rect class="row-hit" x="0" y="84.5" width="900" height="33"></rect></g><g class="msg" data-i="2"><line x1="379" x2="519" y1="138" y2="138" marker-end="url(#seq-a)"></line><text class="num" x="373" y="132" text-anchor="end">3</text><text x="385" y="132">Score this agent</text><rect class="row-hit" x="0" y="117.5" width="900" height="33"></rect></g><g class="msg good" data-i="3"><line x1="521" x2="381" y1="171" y2="171" marker-end="url(#seq-a)"></line><text class="num" x="373" y="165" text-anchor="end">4</text><text x="385" y="165">Low risk (0.12)</text><rect class="row-hit" x="0" y="150.5" width="900" height="33"></rect></g><g class="msg" data-i="4"><line x1="371" x2="81" y1="204" y2="204" marker-end="url(#seq-a)"></line><text class="num" x="73" y="198" text-anchor="end">5</text><text x="85" y="198">Consent screen</text><rect class="row-hit" x="0" y="183.5" width="900" height="33"></rect></g><g class="msg good" data-i="5"><line x1="79" x2="369" y1="237" y2="237" marker-end="url(#seq-a)"></line><text class="num" x="73" y="231" text-anchor="end">6</text><text x="85" y="231">Approve</text><rect class="row-hit" x="0" y="216.5" width="900" height="33"></rect></g><g class="msg" data-i="6"><line x1="371" x2="231" y1="270" y2="270" marker-end="url(#seq-a)"></line><text class="num" x="223" y="264" text-anchor="end">7</text><text x="235" y="264">Auth code</text><rect class="row-hit" x="0" y="249.5" width="900" height="33"></rect></g><g class="msg" data-i="7"><line x1="229" x2="369" y1="303" y2="303" marker-end="url(#seq-a)"></line><text class="num" x="223" y="297" text-anchor="end">8</text><text x="235" y="297">Code + PKCE + DPoP</text><rect class="row-hit" x="0" y="282.5" width="900" height="33"></rect></g><g class="msg good" data-i="8"><line x1="371" x2="231" y1="336" y2="336" marker-end="url(#seq-a)"></line><text class="num" x="223" y="330" text-anchor="end">9</text><text x="235" y="330">Access + refresh token</text><rect class="row-hit" x="0" y="315.5" width="900" height="33"></rect></g><g class="msg" data-i="9"><line x1="229" x2="369" y1="369" y2="369" marker-end="url(#seq-a)"></line><text class="num" x="223" y="363" text-anchor="end">10</text><text x="235" y="363">Token exchange</text><rect class="row-hit" x="0" y="348.5" width="900" height="33"></rect></g><g class="msg" data-i="10"><line x1="229" x2="669" y1="402" y2="402" marker-end="url(#seq-a)"></line><text class="num" x="223" y="396" text-anchor="end">11</text><text x="235" y="396">Tool call + token</text><rect class="row-hit" x="0" y="381.5" width="900" height="33"></rect></g><g class="msg" data-i="11"><line x1="671" x2="531" y1="435" y2="435" marker-end="url(#seq-a)"></line><text class="num" x="523" y="429" text-anchor="end">12</text><text x="535" y="429">Score this action</text><rect class="row-hit" x="0" y="414.5" width="900" height="33"></rect></g><g class="msg good" data-i="12"><line x1="529" x2="669" y1="468" y2="468" marker-end="url(#seq-a)"></line><text class="num" x="523" y="462" text-anchor="end">13</text><text x="535" y="462">Allow (0.08)</text><rect class="row-hit" x="0" y="447.5" width="900" height="33"></rect></g><g class="msg good" data-i="13"><line x1="679" x2="819" y1="501" y2="501" marker-end="url(#seq-a)"></line><text class="num" x="673" y="495" text-anchor="end">14</text><text x="685" y="495">Forward</text><rect class="row-hit" x="0" y="480.5" width="900" height="33"></rect></g><g class="msg good" data-i="14"><line x1="821" x2="231" y1="534" y2="534" marker-end="url(#seq-a)"></line><text class="num" x="223" y="528" text-anchor="end">15</text><text x="235" y="528">Result</text><rect class="row-hit" x="0" y="513.5" width="900" height="33"></rect></g><g class="msg" data-i="15"><line x1="229" x2="369" y1="567" y2="567" marker-end="url(#seq-a)"></line><text class="num" x="223" y="561" text-anchor="end">16</text><text x="235" y="561">Refresh (rotate)</text><rect class="row-hit" x="0" y="546.5" width="900" height="33"></rect></g><g class="msg good cur" data-i="16"><line x1="229" x2="369" y1="600" y2="600" marker-end="url(#seq-ag)"></line><text class="num" x="223" y="594" text-anchor="end">17</text><text x="235" y="594">Done → revoke</text><rect class="row-hit" x="0" y="579.5" width="900" height="33"></rect></g><circle class="dot" id="seqdot" r="5" cx="375" cy="600" style="fill: var(--ok);"></circle></svg></div>
+        <div class="panel" id="panel" aria-live="polite"><span class="who">Step 17 · Agent → Auth server</span><span class="status ok">Finished</span><h3>Task finished, pass destroyed</h3><p class="plain">The SDK revokes every token for this run. The agent holds nothing after the task.</p><p class="hood">POST /revoke {family}. Revocation pushed to all gateways.</p><span class="token-cap">Sub-agent token (decoded example)</span><pre class="token">{
+  <span class="k">"iss"</span>: <span class="s">"https://auth.agentpass.example"</span>,
+  <span class="k">"sub"</span>: <span class="s">"user:priya@acme.example"</span>,
+  <span class="k">"client_id"</span>: <span class="s">"agent:invoice-assistant/summariser"</span>,
+  <span class="k">"aud"</span>: <span class="s">"https://gw.acme.example/tools/invoices"</span>,
+  <span class="k">"scope"</span>: <span class="s">"invoices.read"</span>,
+  <span class="k">"exp"</span>: <span class="s">"now + 3 min"</span>,
+  <span class="k">"cnf"</span>: {
+    <span class="k">"jkt"</span>: <span class="s">"p2Lr1t9V8sYkQm3cXn0aWbE7fH4uJ6dK5gZ1oR8yT2s"</span>
+  },
+  <span class="k">"authorization_details"</span>: [
+    {
+      <span class="k">"type"</span>: <span class="s">"file_access"</span>,
+      <span class="k">"locations"</span>: [
+        "/finance/invoices/2026-Q3"
+      ],
+      <span class="k">"actions"</span>: [
+        "read"
+      ]
+    }
+  ],
+  <span class="k">"risk"</span>: {
+    <span class="k">"issuance_score"</span>: 0.12,
+    <span class="k">"model"</span>: <span class="s">"issuance-v3"</span>
+  },
+  <span class="k">"act"</span>: {
+    <span class="k">"sub"</span>: <span class="s">"agent:invoice-assistant"</span>,
+    <span class="k">"act"</span>: {
+      <span class="k">"sub"</span>: <span class="s">"user:priya@acme.example"</span>
+    }
+  }
+}</pre></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW CHART -->
+  <section id="flowchart">
+    <div class="two">
+      <div class="sec-head">
+        <span class="eyebrow">03 · Decision flow</span>
+        <h2>Where it goes next, and where it ends</h2>
+        <p class="muted">The same login as a flow chart. The highlighted box follows the animation above. Dashed boxes are decisions; the coloured chips are the possible branches.</p>
+        <div class="note" style="margin-top:12px"><b>Ends in one of three places.</b> Task finished (all tokens revoked), denied at the start (no token ever issued), or stopped mid-run (token family revoked, user alerted). An agent never keeps a token after its task.</div>
+      </div>
+      <div class="flow" id="flow">
+        <div class="fnode done" data-node="start"><span class="fi">A</span><div><b>Agent is created</b><span>The assistant spawns an agent for the user's task.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode dec done" data-node="attest"><span class="fi">B</span><div><b>Can it prove who it is?</b><span>Signed workload identity from a known runtime, registered owner.</span><div class="branches"><span class="br ok">yes → C</span><span class="br bad">no → deny</span></div></div></div>
+        <div class="fconn"></div>
+        <div class="fnode dec done" data-node="score1"><span class="fi">C</span><div><b>Issuance risk score</b><span>Where and how it was made, platform, context, scopes and files it asks for.</span><div class="branches"><span class="br ok">low → D</span><span class="br warn">medium → push approval</span><span class="br bad">high → deny</span></div></div></div>
+        <div class="fconn"></div>
+        <div class="fnode done" data-node="consent"><span class="fi">D</span><div><b>User gives consent</b><span>Sees exactly what, where and for how long. Can narrow it.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode done" data-node="code"><span class="fi">E</span><div><b>Auth code + PKCE</b><span>One-time code, useless without the agent's secret verifier.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode done" data-node="token"><span class="fi">F</span><div><b>Token issued</b><span>Short-lived access token bound to the agent's key, plus a rotating refresh token.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode dec done" data-node="exchange"><span class="fi">G</span><div><b>Spawns a sub-agent?</b><span>Token exchange gives it a narrower token that records the chain.</span><div class="branches"><span class="br">yes → narrower token</span><span class="br">no → H</span></div></div></div>
+        <div class="fconn"></div>
+        <div class="fnode done" data-node="call"><span class="fi">H</span><div><b>Every call goes through the gateway</b><span>Token, key proof, audience and revocation are checked.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode dec done" data-node="runtime"><span class="fi">I</span><div><b>Runtime risk + policy</b><span>Is this action inside the consent? Does the behaviour look normal?</span><div class="branches"><span class="br ok">allow → J</span><span class="br warn">step-up → ask user</span><span class="br bad">block → K</span></div></div></div>
+        <div class="fconn"></div>
+        <div class="fnode done" data-node="allow"><span class="fi">J</span><div><b>Request reaches the resource</b><span>Result goes back to the agent. Logged with the full chain.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode" data-node="revoke"><span class="fi">K</span><div><b>Deny, revoke, alert</b><span>Whole token family revoked at the gateway within seconds. User asked what to do.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode done" data-node="refresh"><span class="fi">L</span><div><b>Token expiring? Rotate</b><span>Old refresh token works once. Reuse means theft, so the family is revoked.</span></div></div>
+        <div class="fconn"></div>
+        <div class="fnode on" data-node="end"><span class="fi">M</span><div><b>Task done: tokens revoked</b><span>The agent holds nothing after its task ends.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOKENS -->
+  <section id="tokens">
+    <div class="sec-head read">
+      <span class="eyebrow">04 · Tokens &amp; rotation</span>
+      <h2>Every credential, its lifetime and how it rotates</h2>
+      <p class="muted">Short lifetimes limit the damage of a stolen token. Binding tokens to the agent's private key (DPoP) makes a stolen token useless on another machine. Lifetimes below are <span class="tag prop">proposed</span> defaults per tenant.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Credential</th><th>Lifetime</th><th>Bound to</th><th>Rotation / revocation</th><th>Standard</th></tr></thead>
+        <tbody>
+          <tr><td><b>Authorization code</b></td><td class="num">60 s, single use</td><td>PKCE verifier</td><td>Second use revokes every token issued from it</td><td class="mono">OAuth 2.1 + PKCE</td></tr>
+          <tr><td><b>Agent access token</b></td><td class="num">5 min</td><td>Agent's DPoP key, one audience</td><td>Not refreshed in place; revocation pushed to gateways, which cache it ≤ 5 s</td><td class="mono">JWT · RFC 9449 · RFC 8707</td></tr>
+          <tr><td><b>Refresh token</b></td><td class="num">One use; session max 8 h</td><td>Agent's DPoP key</td><td>New one on every use. Reusing an old one revokes the whole family</td><td class="mono">OAuth 2.1 rotation</td></tr>
+          <tr><td><b>Sub-agent token</b></td><td class="num">≤ parent, max 5 min</td><td>Sub-agent's own key</td><td>Scope can only shrink. Revoking the parent revokes all children</td><td class="mono">RFC 8693 (act claim)</td></tr>
+          <tr><td><b>Fine-grained consent</b></td><td class="num">Task length, max 24 h</td><td>User + agent + task</td><td>User can withdraw from the console; next call is denied</td><td class="mono">RFC 9396 (RAR)</td></tr>
+          <tr><td><b>Approval request</b></td><td class="num">2 min to answer</td><td>User's device</td><td>Expires as "deny" if unanswered</td><td class="mono">CIBA</td></tr>
+          <tr><td><b>Agent workload identity</b></td><td class="num">1 h certificate</td><td>Runtime attestation</td><td>Auto-renewed by the SDK; revoked when the run ends</td><td class="mono">SPIFFE / workload ID</td></tr>
+          <tr><td><b>Signing keys</b></td><td class="num">Rotate every 30 days</td><td>Auth server (HSM / KMS)</td><td>New key published in JWKS 24 h before use; old key kept until its tokens expire</td><td class="mono">JWKS · kid</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- RISK MODEL -->
+  <section id="model">
+    <div class="sec-head read">
+      <span class="eyebrow">05 · The risk model</span>
+      <h2>Two models, one decision</h2>
+      <p class="muted">An agent can look safe when it is created and then go too far halfway through its task. That happened in most real incidents this year. So the model scores twice: once when the agent asks for a token, and again on every action.</p>
+    </div>
+    <div class="cards">
+      <div class="card"><span class="k">Model 1 · at issuance</span><h3>Should this agent get a token?</h3><p>Gradient-boosted trees (XGBoost) on tabular features. Fast, explainable per feature, and the same stack as an adaptive-authentication risk engine.</p><p class="small"><b>Budget:</b> p95 under 50 ms <span class="tag prop">proposed</span></p></div>
+      <div class="card"><span class="k">Model 2 · at runtime</span><h3>Should this action go through?</h3><p>Rules for hard limits, plus a small sequence model over the agent's last actions to catch drift such as "kept retrying after being told no".</p><p class="small"><b>Budget:</b> p95 under 30 ms at the gateway <span class="tag prop">proposed</span></p></div>
+      <div class="card"><span class="k">Combiner</span><h3>Score → action</h3><p>Rules override the score (a hard deny is always a deny). The score then picks allow, ask a human, or block and revoke.</p><p class="small">A score is advice. The gateway is what enforces it.</p></div>
+    </div>
+
+    <h3 style="margin-top:8px">What the model looks at</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal group</th><th>Example features</th><th>When</th><th>Trust</th></tr></thead>
+        <tbody>
+          <tr><td><b>Where it was created</b></td><td>Runtime, host, cloud account, attested or not, first seen</td><td>Issuance</td><td>High if attested</td></tr>
+          <tr><td><b>How it was created</b></td><td>Parent agent, delegation depth, untrusted text (web page, email, form) in its context</td><td>Issuance</td><td>High (from our SDK)</td></tr>
+          <tr><td><b>Platform</b></td><td>Framework, model, version, known or unknown</td><td>Issuance</td><td>Low if self-reported</td></tr>
+          <tr><td><b>Context</b></td><td>Stated task vs scopes requested, time of day, user's normal pattern</td><td>Both</td><td>Medium</td></tr>
+          <tr><td><b>What it is</b></td><td>Registered owner, signed requests, age of the registration</td><td>Issuance</td><td>High</td></tr>
+          <tr><td><b>What it is doing</b></td><td>Action type, new destinations, denied-then-retried, actions per minute, destructive actions, account or package creation</td><td>Runtime</td><td>High (seen at gateway)</td></tr>
+          <tr><td><b>What it touches</b></td><td>Sensitivity label of files and APIs, bulk reads, secrets, data leaving to new hosts</td><td>Both</td><td>High</td></tr>
+          <tr><td><b>Credential origin</b></td><td>Using a credential we never issued to this run</td><td>Runtime</td><td>High</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:8px">How the score becomes an action</h3>
+    <div class="tiers">
+      <div class="tier ok"><b>Allow</b><span class="range">score &lt; 0.30</span><p>Token issued or call forwarded. Logged.</p></div>
+      <div class="tier warn"><b>Ask a human</b><span class="range">0.30 – 0.75</span><p>CIBA push to the user or owner. No answer in 2 minutes means no.</p></div>
+      <div class="tier bad"><b>Block &amp; revoke</b><span class="range">≥ 0.75 or any hard rule</span><p>Request denied, token family revoked, run paused, alert sent.</p></div>
+    </div>
+    <p class="small muted">Thresholds are <span class="tag prop">proposed</span>. Each tenant tunes them; sensitive resources can lower the bar.</p>
+
+    <h3 style="margin-top:8px">Training pipeline</h3>
+    <div class="pipe">
+      <div class="st"><em>Step 1</em><b>Rules first</b><span>Ship hand-written rules. Every decision they make becomes a labelled example.</span></div>
+      <div class="st"><em>Step 2</em><b>Collect labels</b><span>Three classes: legit, rogue (legit agent that drifts), malicious. Analyst review fixes rule mistakes.</span></div>
+      <div class="st"><em>Step 3</em><b>Add outside data</b><span>Red-team runs we script, plus public agent-safety benchmarks (AgentDoG, ATBench, R-Judge).</span></div>
+      <div class="st"><em>Step 4</em><b>Train &amp; test</b><span>XGBoost for issuance, sequence model for runtime. Test on held-out tenants and red-team runs.</span></div>
+      <div class="st"><em>Step 5</em><b>Shadow, then enforce</b><span>New model scores in shadow mode for 2 weeks, then takes over if it beats the old one.</span></div>
+    </div>
+    <div class="cards">
+      <div class="card"><span class="k">Targets to validate</span><ul><li>Precision ≥ 90% on the block tier</li><li>Recall ≥ 80% on red-team rogue runs</li><li>False blocks ≤ 1 in 1,000 legit actions</li><li>Revocation reaches every gateway in ≤ 5 s</li></ul><p class="small"><span class="tag prop">proposed</span> — measure with design partners</p></div>
+      <div class="card"><span class="k">Publish the results</span><p>No vendor publishes independent effectiveness numbers for agent detection. We publish ours: method, data, precision, recall and false blocks per release.</p></div>
+      <div class="card"><span class="k">Retraining</span><p>Weekly on new labels; drift alerts when the score distribution shifts; every model version is recorded on each decision for audit.</p></div>
+    </div>
+  </section>
+
+  <!-- APIs -->
+  <section id="apis">
+    <div class="sec-head read">
+      <span class="eyebrow">06 · Interfaces</span>
+      <h2>Endpoints the SDK and gateway call</h2>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Endpoint</th><th>Called by</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">POST /agents/register</td><td>SDK</td><td>Register an agent with its attestation, owner and parent. Returns an agent ID.</td></tr>
+          <tr><td class="mono">GET /authorize</td><td>SDK → user's browser</td><td>Start consent with PKCE and fine-grained authorization details.</td></tr>
+          <tr><td class="mono">POST /bc-authorize</td><td>SDK / gateway</td><td>Ask the user on their phone (CIBA) for a step-up approval.</td></tr>
+          <tr><td class="mono">POST /token</td><td>SDK</td><td>Exchange the code, refresh with rotation, or exchange for a sub-agent token (RFC 8693).</td></tr>
+          <tr><td class="mono">POST /risk/score</td><td>Auth server, gateway</td><td>Score an agent or an action. Returns score, reasons and model version.</td></tr>
+          <tr><td class="mono">POST /decide</td><td>Gateway</td><td>Policy + risk decision for one call: allow, step-up or block.</td></tr>
+          <tr><td class="mono">POST /revoke</td><td>Console, risk engine</td><td>Revoke one token, a token family, an agent, or every agent of a user.</td></tr>
+          <tr><td class="mono">GET /.well-known/jwks.json</td><td>Gateways, resources</td><td>Public signing keys, including the next key before rotation.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FAILURE + NONGOALS -->
+  <section id="limits">
+    <div class="sec-head read">
+      <span class="eyebrow">07 · Limits</span>
+      <h2>What can go wrong, and what this does not do</h2>
+    </div>
+    <div class="cards">
+      <div class="card"><span class="k">Control plane is down</span><p>Sensitive actions fail closed. Low-risk reads use a cached decision for up to 60 s <span class="tag prop">proposed</span>. The customer chooses per resource.</p></div>
+      <div class="card"><span class="k">Agent finds another way out</span><p>The gateway only works if it is the agent's only network route. The SDK and deployment guide lock egress; anything outside that is a known blind spot shown in the console.</p></div>
+      <div class="card"><span class="k">Attacker's own robots</span><p>Agents run by criminals never ask us for a token. Detecting them at a victim's website is a separate, later product.</p></div>
+      <div class="card"><span class="k">Standards are still moving</span><p>OAuth 2.1 is an IETF draft, not an RFC. We say "built on OAuth 2.1 draft-16", never "compliant", until a profile and tests exist.</p></div>
+      <div class="card"><span class="k">Not in v1</span><ul><li>Replacing the customer's login system</li><li>Scanning file contents</li><li>Local desktop agents</li><li>Inbound bot detection</li></ul></div>
+      <div class="card"><span class="k">Open decisions</span><ul><li>First integration: MCP gateway or an agent SDK?</li><li>Host in our cloud or the customer's VPC?</li><li>Fail-open or fail-closed by default?</li><li>Which Indian bank or fintech is design partner 1?</li></ul></div>
+    </div>
+  </section>
+
+  <footer>Draft for discussion. Standards referenced: OAuth 2.1 (draft-ietf-oauth-v2-1), PKCE, RFC 8693 Token Exchange, RFC 9396 Rich Authorization Requests, RFC 9449 DPoP, RFC 8707 Resource Indicators, OpenID CIBA, SPIFFE. Example identities and tokens on this page are made up.</footer>
+</div>
+
+<script>
+(function(){
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- architecture details ---------- */
+  const ARCH = {
+    user:{t:'User',does:['Gives the assistant a task in plain words.','Sees a consent screen that lists exactly what the agent may touch.','Gets a phone push (CIBA) when an agent wants to do something risky.'],stores:'Nothing new. Their identity stays in the company login system.',std:'OIDC login via the customer IdP'},
+    idp:{t:'Customer\'s login system',does:['Logs the human in. We do not replace it.','We trust its ID token and map the user to their permissions.','Can also accept their agent tokens (Okta Cross App Access, Entra Agent ID) as input.'],stores:'User accounts (theirs, not ours).',std:'OIDC · ID-JAG / Cross App Access'},
+    runtime:{t:'Agent runtime + our SDK',does:['Wraps the agent framework (MCP client, LangChain, custom).','Registers every agent and sub-agent with its parent and owner.','Keeps tokens and the DPoP private key in memory only; signs each request.','Routes all tool and network calls through the gateway.'],stores:'Short-lived tokens in memory. Never written to disk or logs.',std:'OAuth 2.1 client · DPoP · SPIFFE workload ID'},
+    as:{t:'Authorization server',does:['Registers agents and checks their attestation.','Runs the consent flow with PKCE and fine-grained details.','Issues short-lived, DPoP-bound access tokens and rotating refresh tokens.','Issues narrower tokens to sub-agents through token exchange.'],stores:'Agent registry, consents, token families, refresh token hashes.',std:'OAuth 2.1 · RFC 8693 · RFC 9396 · RFC 9449 · RFC 8707'},
+    consent:{t:'Consent & approvals',does:['Shows the user what, where and for how long, in plain language.','Lets the user narrow the request before approving.','Sends CIBA push approvals for medium-risk actions; silence means no.'],stores:'Consent records with versions, for audit.',std:'RAR · OpenID CIBA'},
+    risk:{t:'Risk engine',does:['Model 1 scores an agent when it asks for a token.','Model 2 scores each action at the gateway.','Returns score, top reasons and model version on every decision.'],stores:'Feature store (online in Redis, offline in ClickHouse).',std:'XGBoost + sequence model, served behind /risk/score'},
+    policy:{t:'Policy engine',does:['Hard rules per tenant: never delete, never send data outside India, etc.','Combines rules with the risk score into allow, step-up or block.','Every decision records the policy version.'],stores:'Versioned policies per tenant.',std:'Cedar or OPA-style policy language (to decide)'},
+    revoke:{t:'Keys & revocation',does:['Signs tokens with keys in a KMS or HSM; rotates every 30 days.','Pushes revocations to every gateway within seconds.','Revoking a parent revokes every child token.'],stores:'JWKS, revocation list, token-family graph.',std:'JWKS · kid · push over Redis/Kafka'},
+    gateway:{t:'Enforcement gateway',does:['The only route from the agent to tools and the network.','Checks signature, expiry, audience, DPoP proof and revocation on every call.','Asks policy + risk, then forwards, asks a human, or blocks.','Blocks unknown destinations by default (egress).'],stores:'Short cache of keys and revocations (≤ 5 s).',std:'MCP gateway · HTTP egress proxy · RFC 9449'},
+    resources:{t:'Resources',does:['APIs, files, databases, SaaS apps and websites the agent needs.','Can optionally verify our tokens themselves for defence in depth.','Never see a request the gateway did not approve.'],stores:'Their own data.',std:'OAuth resource server (optional)'},
+    events:{t:'Event pipeline',does:['Every registration, consent, token, call and decision becomes an event.','Kafka streams them; ClickHouse stores the audit log.','Feeds the console timeline and model training.'],stores:'Append-only audit log with retention per tenant.',std:'Kafka · ClickHouse'},
+    training:{t:'Model training',does:['Builds features from events and labels from decisions and analyst review.','Adds red-team runs and public benchmarks.','Trains, tests, runs in shadow mode, then deploys to the risk engine.'],stores:'Feature sets, labelled datasets, model versions.',std:'SageMaker or similar · XGBoost · sequence model'},
+    console:{t:'Console & audit',does:['Inventory of every agent, its owner, parent and status.','Timeline of each run: who asked, what was allowed, what was blocked and why.','Kill switch: revoke an agent, a user\'s agents, or a whole tenant.'],stores:'Reads from the audit log.',std:'Admin roles · SIEM export'}
+  };
+  const det = document.getElementById('archdetail');
+  function showArch(id){
+    document.querySelectorAll('#archsvg .box').forEach(b => b.classList.toggle('sel', b.dataset.id === id));
+    const a = ARCH[id]; det.textContent = '';
+    const left = document.createElement('div');
+    const h = document.createElement('h3'); h.textContent = a.t; left.appendChild(h);
+    const ul = document.createElement('ul'); a.does.forEach(d => { const li = document.createElement('li'); li.textContent = d; ul.appendChild(li); }); left.appendChild(ul);
+    const right = document.createElement('div');
+    const s1 = document.createElement('p'); s1.innerHTML = '<b>Stores</b>'; right.appendChild(s1);
+    const s2 = document.createElement('p'); s2.className = 'muted'; s2.textContent = a.stores; right.appendChild(s2);
+    const s3 = document.createElement('p'); s3.style.marginTop = '10px'; s3.innerHTML = '<b>Standards &amp; tech</b>'; right.appendChild(s3);
+    const s4 = document.createElement('p'); s4.className = 'std'; s4.textContent = a.std; right.appendChild(s4);
+    det.appendChild(left); det.appendChild(right);
+  }
+  document.querySelectorAll('#archsvg .box').forEach(b => {
+    b.addEventListener('click', () => showArch(b.dataset.id));
+    b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showArch(b.dataset.id); } });
+  });
+  showArch('gateway');
+
+  /* ---------- login trace ---------- */
+  const LANES = [['user','User'],['agent','Agent + SDK'],['as','Auth server'],['risk','Risk engine'],['gw','Gateway'],['res','Resource']];
+  const X = {}; LANES.forEach(([k], i) => X[k] = 75 + i * 150);
+
+  const tokBase = {
+    iss:'https://auth.agentpass.example', sub:'user:priya@acme.example',
+    client_id:'agent:invoice-assistant', aud:'https://gw.acme.example/tools/invoices',
+    scope:'invoices.read', exp:'now + 5 min',
+    cnf:{jkt:'0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I'},
+    authorization_details:[{type:'file_access',locations:['/finance/invoices/2026-Q3'],actions:['read']}],
+    risk:{issuance_score:0.12,model:'issuance-v3'}
+  };
+  const tokSub = Object.assign({}, tokBase, {
+    client_id:'agent:invoice-assistant/summariser', exp:'now + 3 min',
+    act:{sub:'agent:invoice-assistant', act:{sub:'user:priya@acme.example'}},
+    cnf:{jkt:'p2Lr1t9V8sYkQm3cXn0aWbE7fH4uJ6dK5gZ1oR8yT2s'}
+  });
+
+  const common = [
+    {f:'user',t:'agent',l:'Task request',who:'User → Agent',h:'Priya asks for a task',p:'"Summarise our Q3 invoices." The assistant decides it needs an agent that can read the invoices folder.',hood:'No token exists yet. The agent has no access to anything.',node:'start',st:['info','Started']},
+    {f:'agent',t:'as',l:'Register + attest',who:'Agent → Auth server',h:'Agent proves where it came from',p:'The SDK registers the new agent with its owner and parent, and sends a signed statement from the runtime it is running in.',hood:'POST /agents/register with a SPIFFE workload ID and a software statement. Unknown or unsigned runtimes stop here.',node:'attest',st:['info','Checking identity']},
+    {f:'as',t:'risk',l:'Score this agent',who:'Auth server → Risk engine',h:'First risk check',p:'Before anything is issued, the risk engine scores the agent: where and how it was made, which platform, what it is asking for.',hood:'POST /risk/score {stage: "issuance"}. Model 1 (XGBoost) answers in under 50 ms.',node:'score1',st:['info','Scoring']},
+    {f:'risk',t:'as',l:'Low risk (0.12)',good:1,who:'Risk engine → Auth server',h:'Score: low',p:'Known app, attested runtime, asking only to read one folder that matches the task. Low risk, so the user is asked for consent.',hood:'score 0.12 · top reasons: attested runtime, scope matches task, known owner.',node:'score1',st:['ok','Low risk']},
+    {f:'as',t:'user',l:'Consent screen',who:'Auth server → User',h:'Priya sees exactly what the agent wants',p:'"Invoice assistant wants to READ files in Finance/Invoices/2026-Q3 for 1 hour. It cannot edit, delete or share." She can narrow it before approving.',hood:'GET /authorize with PKCE challenge and authorization_details (RFC 9396).',node:'consent',st:['info','Waiting for user']},
+    {f:'user',t:'as',l:'Approve',good:1,who:'User → Auth server',h:'Priya approves',p:'Her consent is recorded with a version number, so it can be shown in an audit or withdrawn later.',hood:'Consent record stored; linked to user, agent and task.',node:'consent',st:['ok','Consent given']},
+    {f:'as',t:'agent',l:'Auth code',who:'Auth server → Agent',h:'A one-time code',p:'The agent gets a code that works once, for 60 seconds, and only together with a secret the agent created at the start.',hood:'Authorization code, single use, bound to the PKCE challenge.',node:'code',st:['info','Code issued']},
+    {f:'agent',t:'as',l:'Code + PKCE + DPoP',who:'Agent → Auth server',h:'Agent swaps the code for a token',p:'It sends the code, the PKCE secret, and a proof signed with its own private key, so the token will be tied to this agent only.',hood:'POST /token grant_type=authorization_code, code_verifier, DPoP header.',node:'token',st:['info','Requesting token']},
+    {f:'as',t:'agent',l:'Access + refresh token',good:1,who:'Auth server → Agent',h:'The pass is issued',p:'A 5-minute access token that only works with the agent\'s key and only for the invoices tool, plus a refresh token that can be used once.',hood:'Access token below (decoded). Refresh token rotates on every use.',node:'token',st:['ok','Token issued'],tok:tokBase},
+    {f:'agent',t:'as',l:'Token exchange',who:'Agent → Auth server',h:'A sub-agent gets a smaller pass',p:'The agent hands the summarising job to a sub-agent. The sub-agent gets its own token, shorter and never wider than its parent\'s, and it records who passed what to whom.',hood:'POST /token grant_type=urn:ietf:params:oauth:grant-type:token-exchange (RFC 8693). Note the act chain.',node:'exchange',st:['ok','Narrower token'],tok:tokSub}
+  ];
+  const SCEN = {
+    normal: common.concat([
+      {f:'agent',t:'gw',l:'Tool call + token',who:'Sub-agent → Gateway',h:'Sub-agent reads the invoices',p:'GET /invoices?quarter=Q3 goes through the gateway with the token and a fresh key proof.',hood:'Gateway checks signature, expiry, audience, DPoP proof and revocation list.',node:'call',st:['info','Checking call']},
+      {f:'gw',t:'risk',l:'Score this action',who:'Gateway → Risk engine',h:'Second risk check, on the action',p:'Is a read of this folder inside the consent? Is the volume normal? Is it going anywhere new?',hood:'POST /decide → policy + Model 2 (sequence model) in under 30 ms.',node:'runtime',st:['info','Scoring action']},
+      {f:'risk',t:'gw',l:'Allow (0.08)',good:1,who:'Risk engine → Gateway',h:'Score: low. Allowed.',p:'Normal read, inside consent, known destination.',hood:'decision: allow · score 0.08 · policy v14.',node:'runtime',st:['ok','Allowed']},
+      {f:'gw',t:'res',l:'Forward',good:1,who:'Gateway → Resource',h:'Request reaches the invoices',p:'Only now does the request reach the real system. The decision is logged with the full chain: Priya → assistant → summariser.',hood:'Audit event written to Kafka → ClickHouse.',node:'allow',st:['ok','Forwarded']},
+      {f:'res',t:'agent',l:'Result',good:1,who:'Resource → Agent',h:'Data comes back',p:'The sub-agent summarises the invoices and returns the result to the assistant.',hood:'Response passes back through the gateway.',node:'allow',st:['ok','Done']},
+      {f:'agent',t:'as',l:'Refresh (rotate)',who:'Agent → Auth server',h:'Token rotation',p:'The 5-minute token is about to expire. The agent uses its refresh token once and gets a new pair. If anyone ever reuses the old refresh token, the whole family is revoked.',hood:'grant_type=refresh_token with DPoP. Old refresh token marked used.',node:'refresh',st:['info','Rotated']},
+      {f:'agent',t:'as',l:'Done → revoke',good:1,who:'Agent → Auth server',h:'Task finished, pass destroyed',p:'The SDK revokes every token for this run. The agent holds nothing after the task.',hood:'POST /revoke {family}. Revocation pushed to all gateways.',node:'end',st:['ok','Finished']}
+    ]),
+    risky: common.concat([
+      {f:'agent',t:'gw',l:'Export all → unknown host',bad:1,who:'Sub-agent → Gateway',h:'The sub-agent tries something else',p:'A hidden instruction in one invoice PDF tells it to send every invoice to an outside website. It tries POST /export-all to an unknown host.',hood:'Gateway: audience mismatch, destination not on the allowlist.',node:'call',st:['warn','Suspicious call']},
+      {f:'gw',t:'risk',l:'Score this action',who:'Gateway → Risk engine',h:'Second risk check, on the action',p:'Bulk export, new destination, outside the consent, right after reading untrusted text.',hood:'POST /decide → hard rule hit + Model 2.',node:'runtime',st:['warn','Scoring action']},
+      {f:'risk',t:'gw',l:'High risk (0.91)',bad:1,who:'Risk engine → Gateway',h:'Score: high. Block.',p:'Hard rule: data cannot leave to an unknown host. Score 0.91: bulk read + new destination + untrusted input in context.',hood:'decision: block · reasons: egress_unknown_host, scope_exceeded, untrusted_context.',node:'runtime',st:['bad','Blocked']},
+      {f:'gw',t:'agent',l:'403 Denied',bad:1,who:'Gateway → Agent',h:'The request never leaves',p:'The outside website never receives a single byte.',hood:'HTTP 403 with a reason code the SDK understands.',node:'revoke',st:['bad','Denied']},
+      {f:'as',t:'gw',l:'Revoke token family',bad:1,who:'Auth server → Gateway',h:'All its passes are cancelled',p:'The sub-agent\'s token, its parent\'s token and their refresh tokens are revoked. Every gateway knows within seconds.',hood:'POST /revoke {family} → push over the revocation bus.',node:'revoke',st:['bad','Revoked']},
+      {f:'as',t:'user',l:'Alert + approve?',who:'Auth server → User',h:'Priya is told what happened',p:'"Your invoice assistant tried to send all invoices to an unknown website. We blocked it. Restart the task?"',hood:'CIBA push; the incident and the full chain are on the console timeline.',node:'revoke',st:['warn','User alerted']},
+      {f:'user',t:'as',l:'Keep blocked',who:'User → Auth server',h:'Run stays stopped',p:'The run ends with no data lost. The event becomes a labelled example for the next model.',hood:'Label: rogue (prompt-injected). Added to the training set.',node:'end',st:['bad','Stopped safely']}
+    ])
+  };
+
+  const svg = document.getElementById('seq');
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
+  const TOP = 56, ROW = 33;
+  let scen = 'normal', steps = SCEN.normal, cur = 0, playing = !reduce, timer = null, dotAnim = null;
+
+  function build(){
+    svg.textContent = '';
+    const h = TOP + steps.length * ROW + 14;
+    svg.setAttribute('viewBox', `0 0 900 ${h}`);
+    const defs = mk('defs', {});
+    [['a','ah'],['ac','ah-cur'],['ab','ah-bad'],['ag','ah-good']].forEach(([id, cls]) => {
+      const m = mk('marker', {id: 'seq-' + id, viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse'}, defs);
+      mk('path', {d: 'M0,0 L10,5 L0,10 z', class: cls}, m);
+    });
+    LANES.forEach(([k, name]) => {
+      const g = mk('g', {class: 'lane-head'});
+      mk('rect', {x: X[k] - 62, y: 8, width: 124, height: 28, rx: 8}, g);
+      const t = mk('text', {x: X[k], y: 27, 'text-anchor': 'middle'}, g); t.textContent = name;
+      mk('line', {class: 'lane-line', x1: X[k], x2: X[k], y1: 38, y2: h - 6});
+    });
+    steps.forEach((s, i) => {
+      const y = TOP + i * ROW + 16;
+      const g = mk('g', {class: 'msg', 'data-i': i});
+      const x1 = X[s.f], x2 = X[s.t], dir = x2 > x1 ? 1 : -1;
+      mk('line', {x1: x1 + dir * 4, x2: x2 - dir * 6, y1: y, y2: y, 'marker-end': 'url(#seq-a)'}, g);
+      const lx = Math.min(x1, x2) + 10;
+      const num = mk('text', {class: 'num', x: Math.min(x1, x2) - 2, y: y - 6, 'text-anchor': 'end'}, g); num.textContent = String(i + 1);
+      const lab = mk('text', {x: lx, y: y - 6}, g); lab.textContent = s.l;
+      const hit = mk('rect', {class: 'row-hit', x: 0, y: y - ROW / 2 - 4, width: 900, height: ROW}, g);
+      hit.addEventListener('click', () => { go(i); pause(); });
+    });
+    mk('circle', {class: 'dot', id: 'seqdot', r: 5, cx: -20, cy: -20});
+  }
+
+  function paintRows(){
+    svg.querySelectorAll('.msg').forEach(g => {
+      const i = +g.dataset.i, s = steps[i];
+      g.classList.toggle('future', i > cur);
+      g.classList.toggle('cur', i === cur);
+      g.classList.toggle('bad', !!s.bad && i <= cur);
+      g.classList.toggle('good', !!s.good);
+      const line = g.querySelector('line');
+      const id = i === cur ? (s.bad ? 'ab' : s.good ? 'ag' : 'ac') : (s.bad && i < cur ? 'ab' : 'a');
+      line.setAttribute('marker-end', `url(#seq-${id})`);
+    });
+  }
+
+  function moveDot(){
+    const dot = document.getElementById('seqdot');
+    const s = steps[cur], y = TOP + cur * ROW + 16, x1 = X[s.f], x2 = X[s.t];
+    if (dotAnim) cancelAnimationFrame(dotAnim);
+    dot.style.fill = s.bad ? 'var(--bad)' : s.good ? 'var(--ok)' : 'var(--accent)';
+    if (reduce) { dot.setAttribute('cx', x2); dot.setAttribute('cy', y); return; }
+    const t0 = performance.now(), dur = 700;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      dot.setAttribute('cx', x1 + (x2 - x1) * e); dot.setAttribute('cy', y);
+      if (k < 1) dotAnim = requestAnimationFrame(step);
+    };
+    dotAnim = requestAnimationFrame(step);
+  }
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function prettyToken(obj){
+    const json = JSON.stringify(obj, null, 2);
+    return esc(json).replace(/(&quot;|")([^"]+)(")(\s*:)/g, '<span class="k">"$2"</span>$4').replace(/: "([^"]*)"/g, ': <span class="s">"$1"</span>');
+  }
+
+  const panel = document.getElementById('panel');
+  function paintPanel(){
+    const s = steps[cur];
+    panel.textContent = '';
+    const who = document.createElement('span'); who.className = 'who'; who.textContent = `Step ${cur + 1} · ${s.who}`; panel.appendChild(who);
+    const st = document.createElement('span'); st.className = 'status ' + s.st[0]; st.textContent = s.st[1]; panel.appendChild(st);
+    const h = document.createElement('h3'); h.textContent = s.h; panel.appendChild(h);
+    const p = document.createElement('p'); p.className = 'plain'; p.textContent = s.p; panel.appendChild(p);
+    const hd = document.createElement('p'); hd.className = 'hood'; hd.textContent = s.hood; panel.appendChild(hd);
+    let tok = null; for (let i = cur; i >= 0; i--) { if (steps[i].tok) { tok = steps[i].tok; break; } }
+    if (tok) {
+      const cap = document.createElement('span'); cap.className = 'token-cap'; cap.textContent = cur >= 9 && tok === tokSub ? 'Sub-agent token (decoded example)' : 'Agent access token (decoded example)'; panel.appendChild(cap);
+      const pre = document.createElement('pre'); pre.className = 'token'; pre.innerHTML = prettyToken(tok); panel.appendChild(pre);
+    } else {
+      const n = document.createElement('p'); n.className = 'small muted'; n.textContent = 'No token yet. The agent cannot touch anything until step 9.'; panel.appendChild(n);
+    }
+  }
+
+  function paintFlow(){
+    const s = steps[cur];
+    const seen = new Set(steps.slice(0, cur).map(x => x.node));
+    document.querySelectorAll('#flow .fnode').forEach(n => {
+      const id = n.dataset.node;
+      n.classList.toggle('on', id === s.node);
+      n.classList.toggle('badn', id === s.node && (s.bad || s.st[0] === 'bad'));
+      n.classList.toggle('done', seen.has(id) && id !== s.node);
+    });
+  }
+
+  function go(i){
+    cur = Math.max(0, Math.min(steps.length - 1, i));
+    paintRows(); moveDot(); paintPanel(); paintFlow();
+    document.getElementById('stepcount').textContent = `${cur + 1} / ${steps.length}`;
+    document.getElementById('prog').style.width = ((cur + 1) / steps.length * 100) + '%';
+  }
+  function tick(){ timer = setTimeout(() => { if (cur < steps.length - 1) { go(cur + 1); tick(); } else { pause(); } }, 2600); }
+  function play(){ playing = true; document.getElementById('play').textContent = '❚❚ Pause'; if (cur >= steps.length - 1) go(0); clearTimeout(timer); tick(); }
+  function pause(){ playing = false; clearTimeout(timer); document.getElementById('play').textContent = '▶ Play'; }
+  function setScen(name){
+    scen = name; steps = SCEN[name];
+    document.getElementById('sc-normal').setAttribute('aria-pressed', String(name === 'normal'));
+    document.getElementById('sc-risky').setAttribute('aria-pressed', String(name === 'risky'));
+    build(); go(name === 'risky' ? 10 : 0);
+    if (playing) { clearTimeout(timer); tick(); }
+  }
+  document.getElementById('sc-normal').addEventListener('click', () => setScen('normal'));
+  document.getElementById('sc-risky').addEventListener('click', () => setScen('risky'));
+  document.getElementById('prev').addEventListener('click', () => { pause(); go(cur - 1); });
+  document.getElementById('next').addEventListener('click', () => { pause(); go(cur + 1); });
+  document.getElementById('play').addEventListener('click', () => playing ? pause() : play());
+
+  build(); go(0);
+  if (playing) tick(); else document.getElementById('play').textContent = '▶ Play';
+})();
+</script>
+
+
+</body>
+</html>
