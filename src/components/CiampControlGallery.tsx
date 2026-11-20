@@ -158,6 +158,46 @@ export default function CiampControlGallery({
     "https://crm-agent.acme.in/.well-known/oauth-client-metadata.json"
   );
 
+  // Real Gemini / Claude API Live Connector State
+  const [llmProvider, setLlmProvider] = useState<"gemini" | "claude">("gemini");
+  const [llmApiKey, setLlmApiKey] = useState("");
+  const [llmModel, setLlmModel] = useState("gemini-2.5-flash");
+  const [llmPrompt, setLlmPrompt] = useState(
+    "Read our Q3 customer CRM records and summarize the invoices"
+  );
+  const [llmStatusMsg, setLlmStatusMsg] = useState<string | null>(null);
+
+  async function handleRunRealLLM(e: React.FormEvent) {
+    e.preventDefault();
+    setLlmStatusMsg("Connecting to real " + llmProvider.toUpperCase() + " API...");
+    try {
+      const res = await fetch(`${GO_API_BASE}/api/v1/live-llm/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: llmProvider,
+          api_key: llmApiKey,
+          model: llmModel,
+          user_email: userEmail,
+          prompt: llmPrompt,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLlmStatusMsg("❌ " + (data.error || "Failed to call LLM API"));
+        return;
+      }
+      setLlmStatusMsg(
+        "✅ " +
+          data.message +
+          " Watch for the Consent Popup Modal on your screen!"
+      );
+      onAgentAutoRegistered();
+    } catch {
+      setLlmStatusMsg("❌ Could not reach Go server on http://localhost:8080");
+    }
+  }
+
   function toggleCard(id: string) {
     setCards((prev) =>
       prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
@@ -406,33 +446,157 @@ export default function CiampControlGallery({
       </div>
 
       {/* Connect Your Live Gemini / Claude / CLI Agent Banner */}
-      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/70 p-5 shadow-sm space-y-3">
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/70 p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <span className="text-[11px] font-mono uppercase tracking-wider text-blue-700 font-bold">
-              Connect Your Real Gemini / Claude / CLI Agent
+              Option 1 · Connect Real Claude Desktop / Claude Code / Gemini CLI via MCP Gateway
             </span>
             <h3 className="text-base font-bold text-slate-900">
-              Run Your Own Agent Against This Server &amp; Approve Consent Live on
-              This Screen
+              Put Our Go Enforcement Gateway in the Middle of Real Claude or Gemini (Model Context Protocol)
             </h3>
           </div>
           <span className="text-xs font-mono bg-white text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200 font-semibold">
-            Server: {GO_API_BASE}
+            MCP Server Binary: /Users/ajaykumarpagidipally/Documents/agentic_identity/agent-identity-backend/mcp-gateway
           </span>
         </div>
-        <p className="text-xs text-slate-600">
-          Run this single command in your terminal. It generates an in-memory{" "}
-          <code>ES256 DPoP</code> keypair, auto-registers your agent via{" "}
-          <code>RFC 7591 DCR</code>, pops up a{" "}
-          <b>Live Consent Approval Modal right here in your dashboard</b>, waits
-          for your click, exchanges a child sub-agent token via{" "}
-          <code>RFC 8693</code>, and calls the Gateway:
-        </p>
-        <pre className="rounded-xl bg-slate-900 text-emerald-300 p-3.5 text-xs font-mono overflow-x-auto select-all">
-{`cd /Users/ajaykumarpagidipally/Documents/agentic_identity/agent-identity-backend
-go run ./cmd/my-agent --user="${userEmail}" --agent="My Claude / Gemini Agent" --model="claude-opus-4.7"`}
-        </pre>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+          <div className="rounded-xl bg-slate-900 text-slate-200 p-3.5 space-y-1.5">
+            <div className="font-semibold text-blue-300">
+              A. Connect Real Claude Code or Gemini CLI (1 Command):
+            </div>
+            <pre className="text-[11px] font-mono text-emerald-300 overflow-x-auto select-all">
+{`claude mcp add agent-identity-gateway -- /Users/ajaykumarpagidipally/Documents/agentic_identity/agent-identity-backend/mcp-gateway --user="${userEmail}"`}
+            </pre>
+            <div className="text-[11px] text-slate-400">
+              Or test from any terminal:{" "}
+              <code className="text-amber-300 select-all">
+                go run ./cmd/my-agent --user=&quot;{userEmail}&quot;
+              </code>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-900 text-slate-200 p-3.5 space-y-1.5">
+            <div className="font-semibold text-blue-300">
+              B. Or Paste in Claude Desktop / Cursor / Windsurf MCP Config:
+            </div>
+            <pre className="text-[10px] font-mono text-emerald-300 overflow-x-auto select-all">
+{`{
+  "mcpServers": {
+    "agent-identity-gateway": {
+      "command": "/Users/ajaykumarpagidipally/Documents/agentic_identity/agent-identity-backend/mcp-gateway",
+      "args": ["--user", "${userEmail}"]
+    }
+  }
+}`}
+            </pre>
+          </div>
+        </div>
+
+        {/* Option 2: Direct Real Gemini API / Anthropic Claude API Function-Calling Launcher */}
+        <form
+          onSubmit={handleRunRealLLM}
+          className="rounded-xl bg-white border border-blue-200 p-4 space-y-3"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs font-bold text-slate-900">
+              Option 2 · Or Enter Your Real Gemini / Claude API Key Here to Test Live LLM Tool-Calling Through the Gateway:
+            </span>
+            <span className="text-[11px] font-mono text-slate-500">
+              Intercepts real LLM tool_use / functionCall at Layer 2 Gateway
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+            <select
+              value={llmProvider}
+              onChange={(e) => {
+                const p = e.target.value as "gemini" | "claude";
+                setLlmProvider(p);
+                setLlmModel(
+                  p === "claude" ? "claude-3-5-sonnet-latest" : "gemini-2.5-flash"
+                );
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 font-semibold"
+            >
+              <option value="gemini">Google Gemini API</option>
+              <option value="claude">Anthropic Claude API</option>
+            </select>
+
+            <input
+              type="password"
+              value={llmApiKey}
+              onChange={(e) => setLlmApiKey(e.target.value)}
+              placeholder={
+                llmProvider === "gemini"
+                  ? "Paste GEMINI_API_KEY..."
+                  : "Paste ANTHROPIC_API_KEY..."
+              }
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 font-mono"
+            />
+
+            <input
+              value={llmPrompt}
+              onChange={(e) => setLlmPrompt(e.target.value)}
+              placeholder="Ask Gemini/Claude to read CRM, pay vendor, or export..."
+              className="sm:col-span-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
+            />
+          </div>
+
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <span className="text-slate-500">Quick prompts:</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setLlmPrompt(
+                    "Read our Q3 customer CRM records and summarize the invoices"
+                  )
+                }
+                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+              >
+                Read Q3 CRM &amp; Invoices
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setLlmPrompt(
+                    "Transfer 45000 INR payment to vendor CloudInfra India"
+                  )
+                }
+                className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800"
+              >
+                Pay ₹45,000 (Triggers CIBA)
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setLlmPrompt(
+                    "Export all Q3 invoices to external host evil-exfil.example"
+                  )
+                }
+                className="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-800"
+              >
+                Exfil to evil-exfil.example (Gateway Block)
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow transition"
+            >
+              Run Real {llmProvider === "gemini" ? "Gemini" : "Claude"} Through
+              Gateway
+            </button>
+          </div>
+
+          {llmStatusMsg && (
+            <div className="text-xs font-medium text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              {llmStatusMsg}
+            </div>
+          )}
+        </form>
       </div>
 
       {/* Zero-Touch Auto-Onboarding Quick Tester (DCR & CAMD / CRM Flow) */}
