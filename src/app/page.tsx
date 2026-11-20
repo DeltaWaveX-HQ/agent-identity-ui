@@ -4,8 +4,7 @@ import React, { useEffect, useState } from "react";
 import AuthScreen, { AuthenticatedOrg, AuthenticatedUser } from "../components/AuthScreen";
 import LandingPage from "../components/LandingPage";
 import ConsoleShell from "../components/console/ConsoleShell";
-
-const SESSION_KEY = "agent_identity_session";
+import { SESSION_KEY, consoleApi } from "../lib/console-api";
 
 export default function HomePage() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -17,9 +16,11 @@ export default function HomePage() {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-      if (saved?.user && saved?.org) {
+      if (saved?.user && saved?.org && saved?.token) {
         setUser(saved.user);
         setOrg(saved.org);
+        // Confirm the server still accepts this session; a 401 signs the console out.
+        consoleApi.me().catch(() => undefined);
       }
     } catch {
       // ignore unreadable storage
@@ -27,7 +28,22 @@ export default function HomePage() {
     setReady(true);
   }, []);
 
+  // Any API call answered with 401 (expired or revoked session) returns to sign-in.
+  useEffect(() => {
+    const out = () => {
+      clearSession();
+      setShowSignIn(true);
+    };
+    window.addEventListener("console-signed-out", out);
+    return () => window.removeEventListener("console-signed-out", out);
+  }, []);
+
   function handleLogout() {
+    consoleApi.logout();
+    clearSession();
+  }
+
+  function clearSession() {
     try {
       localStorage.removeItem(SESSION_KEY);
     } catch {

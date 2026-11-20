@@ -140,8 +140,33 @@ export interface Connections {
   upstreams?: { Name: string; Description: string; Transport: string; Error: string; Tools: string[] | null }[];
 }
 
+// ---------- console session ----------
+
+/** localStorage key holding { user, org, token } after sign-in. */
+export const SESSION_KEY = "agent_identity_session";
+
+/** The signed-in user's session token (sent as Authorization: Bearer sess_…). */
+export function sessionToken(): string {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null")?.token || "";
+  } catch {
+    return "";
+  }
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const t = sessionToken();
+  return t ? { ...extra, Authorization: `Bearer ${t}` } : extra;
+}
+
+/** The server no longer accepts this session (expired, signed out elsewhere): go back to sign-in. */
+function signedOut() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("console-signed-out"));
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${GO_API_BASE}${path}`, { cache: "no-store" });
+  const res = await fetch(`${GO_API_BASE}${path}`, { cache: "no-store", headers: authHeaders() });
+  if (res.status === 401) signedOut();
   if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
   return res.json();
 }
@@ -149,9 +174,10 @@ async function get<T>(path: string): Promise<T> {
 async function post<T = unknown>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${GO_API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
+  if (res.status === 401) signedOut();
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error || `${path}: HTTP ${res.status}`);
   return data as T;
@@ -183,7 +209,12 @@ export const consoleApi = {
   togglePolicy: (id: string, enabled: boolean) => post("/api/v1/policies/toggle", { id, enabled }),
   allowHost: (host: string) => post("/api/v1/gateway/egress-allowlist", { hosts: [host] }),
 
-  eventStreamUrl: () => `${GO_API_BASE}/api/v1/events/stream`,
+  // EventSource cannot send headers, so the stream takes the session in the query string.
+  eventStreamUrl: () => `${GO_API_BASE}/api/v1/events/stream?access_token=${encodeURIComponent(sessionToken())}`,
+
+  // Session
+  me: () => get<{ user: unknown; organization: unknown }>("/api/v1/auth/me"),
+  logout: () => post("/api/v1/auth/logout", {}).catch(() => undefined),
 };
 
 // ---------- display helpers ----------
