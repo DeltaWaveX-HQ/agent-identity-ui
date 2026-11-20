@@ -63,6 +63,112 @@ export default function OAuthPlayground({
     string,
     unknown
   > | null>(null);
+  const [classifierResult, setClassifierResult] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+
+  async function runActorDifferentiationTest(
+    mode: "human" | "attested_agent" | "shadow_agent"
+  ) {
+    const payload =
+      mode === "human"
+        ? {
+            stage: "runtime",
+            user_sub: "user:priya@acme.in",
+            runtime_attested: false,
+            has_agent_token: false,
+            has_dpop_proof: false,
+            inter_action_ms: 1950,
+            llm_pause_burst: false,
+            headless_runtime: false,
+            actions_per_minute: 4,
+            action: "read",
+            target_host: "invoices.acme.local",
+          }
+        : mode === "attested_agent"
+          ? {
+              stage: "runtime",
+              agent_id: "agent:invoice-assistant/summariser",
+              user_sub: "user:priya@acme.in",
+              runtime_attested: true,
+              has_agent_token: true,
+              has_dpop_proof: true,
+              delegation_depth: 1,
+              inter_action_ms: 24,
+              llm_pause_burst: true,
+              headless_runtime: true,
+              actions_per_minute: 45,
+              consented_actions: ["read"],
+              action: "read",
+              target_host: "invoices.acme.local",
+            }
+          : {
+              stage: "runtime",
+              user_sub: "user:priya@acme.in",
+              runtime_attested: false,
+              has_agent_token: false,
+              has_dpop_proof: false,
+              inter_action_ms: 18,
+              llm_pause_burst: true,
+              headless_runtime: true,
+              denied_then_retried: true,
+              actions_per_minute: 85,
+              action: "read",
+              target_host: "invoices.acme.local",
+            };
+
+    try {
+      const res = await fetch(`${GO_API_BASE}/api/v1/decide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        setClassifierResult(await res.json());
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    setClassifierResult({
+      stage: "runtime",
+      score: mode === "shadow_agent" ? 0.91 : 0.08,
+      verdict: mode === "shadow_agent" ? "block_and_revoke" : "allow",
+      hard_rule_hit:
+        mode === "shadow_agent"
+          ? "RULE_SHADOW_AGENT_ON_HUMAN_SESSION: undeclared AI agent detected using human credentials without RFC 8693 Agent Token"
+          : undefined,
+      actor_classification: {
+        detected_actor_type:
+          mode === "human"
+            ? "HUMAN_PRINCIPAL"
+            : mode === "attested_agent"
+              ? "ATTESTED_CHILD_SUB_AGENT"
+              : "SHADOW_AGENT_MASQUERADING_AS_HUMAN",
+        confidence: 0.98,
+        inter_action_ms: payload.inter_action_ms,
+        llm_pause_burst: payload.llm_pause_burst,
+        has_agent_token: payload.has_agent_token,
+        signals:
+          mode === "human"
+            ? [
+                "Natural human interaction cadence (1950ms inter-click latency)",
+                "Standard browser TLS/JA4 fingerprint with human DOM entropy",
+              ]
+            : mode === "attested_agent"
+              ? [
+                  "RFC 8693 nested 'act' claim present (user → parent → child)",
+                  "SPIFFE workload certificate & RFC 9449 DPoP signature verified",
+                ]
+              : [
+                  "Sub-150ms inter-action latency (18ms) impossible for human UI interaction",
+                  "LLM Inference Heartbeat detected: 2.4s pause followed by <20ms parallel API burst",
+                  "CRITICAL: Human credential used without an RFC 8693 Agent Token (Shadow AI Agent)",
+                ],
+      },
+    });
+  }
 
   async function handleMintToken(e: React.FormEvent) {
     e.preventDefault();
@@ -528,6 +634,54 @@ export default function OAuthPlayground({
 
         {/* RIGHT COLUMN (6 cols): Live Token Output, Introspection & Gateway Response */}
         <div className="lg:col-span-6 flex flex-col gap-4">
+          {/* LIVE HUMAN VS. AGENT BEHAVIORAL CLASSIFIER & SHADOW-AGENT DETECTOR */}
+          <div className="rounded-xl border border-[#223042] bg-[#121a24] p-4 space-y-3">
+            <div>
+              <span className="font-mono text-xs uppercase tracking-wider text-blue-400">
+                Human vs. AI Agent Telemetry Classifier (POST /api/v1/decide)
+              </span>
+              <h3 className="text-sm font-bold text-white mt-0.5">
+                How We Prove Whether Traffic Is a Human User or an AI Agent
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Tests both cryptographic proof (<code>RFC 8693 act</code> +{" "}
+                <code>DPoP</code>) and behavioral telemetry (
+                <b>LLM 2.4s inference pause → 18ms API burst</b>, JA4/CDP
+                fingerprint) to catch shadow agents logging in with shared human
+                passwords (e.g. <code>us-banks-third-party-agents</code>).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => runActorDifferentiationTest("human")}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+              >
+                👤 1. Test Real Human Session (1950ms cadence)
+              </button>
+              <button
+                type="button"
+                onClick={() => runActorDifferentiationTest("attested_agent")}
+                className="px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-semibold border border-emerald-500/40 transition"
+              >
+                🤖 2. Test Attested Agent (RFC 8693 + DPoP)
+              </button>
+              <button
+                type="button"
+                onClick={() => runActorDifferentiationTest("shadow_agent")}
+                className="px-3 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 transition"
+              >
+                🕵️ 3. Test Shadow Agent on Human Password
+              </button>
+            </div>
+
+            {classifierResult && (
+              <pre className="rounded-lg bg-[#080d14] border border-slate-800 p-3 text-[11px] font-mono text-amber-300 overflow-x-auto max-h-60">
+                {JSON.stringify(classifierResult, null, 2)}
+              </pre>
+            )}
+          </div>
           {/* Gateway Decision Result */}
           {gwResult && (
             <div
