@@ -1,14 +1,98 @@
 "use client";
 
-import React from "react";
-import { TelemetryEvent } from "../lib/types";
-import { KeyRound, GitBranch, Shield, Activity } from "lucide-react";
+import React, { useState } from "react";
+import { AgentAccessTokenClaims, TelemetryEvent } from "../lib/types";
+import { KeyRound, GitBranch, Shield, Activity, UserCheck } from "lucide-react";
 
 interface Props {
   event: TelemetryEvent | null;
 }
 
+function buildHierarchyView(
+  claims: AgentAccessTokenClaims,
+  event: TelemetryEvent | null
+) {
+  const isChild = Boolean(claims.act || claims.parent_jti);
+  const loc =
+    claims.authorization_details?.[0]?.locations?.[0] || "/finance/invoices/2026-Q3";
+  const acts =
+    claims.authorization_details?.[0]?.actions?.join(",") || "read";
+  const folderScope = `${loc}:${acts} (${claims.scope})`;
+
+  const isRevoked =
+    event?.family_graph?.revoked || event?.status === "bad";
+  const isStepUp = event?.risk_decision?.verdict === "step-up";
+
+  const authStatus = isRevoked
+    ? "no (revoked)"
+    : isStepUp
+      ? "step-up (awaiting human CIBA)"
+      : "yes";
+
+  const reasons = event?.risk_decision?.top_reasons || [
+    "spiffe_workload_attested",
+    "action_within_rar_consent",
+    "dpop_sender_constrained",
+  ];
+
+  if (!isChild) {
+    return {
+      user: {
+        id: claims.sub,
+        authenticated_via: "oidc_federated_idp (Okta / LoginRadius)",
+        standing_role: "Finance Manager",
+        agent: {
+          id: claims.client_id,
+          scope: folderScope,
+          authorised: authStatus,
+          token: claims.jti,
+          time: `ttl=${claims.exp - claims.iat}s (exp=${claims.exp})`,
+          type_of_agent: "parent",
+          awake: `gemini-2.5-flash (parent awakened by ${claims.sub})`,
+          reason: reasons,
+          authorised_flow: "oauth2.1 + pkce + rfc9396_rar + rfc9449_dpop",
+          dpop_cnf_jkt: claims.cnf?.jkt,
+        },
+      },
+    };
+  }
+
+  return {
+    user: {
+      id: claims.sub,
+      authenticated_via: "oidc_federated_idp (Okta / LoginRadius)",
+      standing_role: "Finance Manager",
+      agent: {
+        id: claims.act?.sub || "agent:invoice-assistant",
+        scope: folderScope,
+        authorised: isRevoked ? "no (revoked via child cascade)" : "yes",
+        token: claims.parent_jti || "tok_parent_8f91a2",
+        time: "ttl=300s (parent session)",
+        type_of_agent: "parent",
+        awake: `gemini-2.5-flash (parent awakened by ${claims.sub})`,
+        reason: ["spiffe_workload_attested", "spawned_child_via_rfc8693"],
+        authorised_flow: "oauth2.1 + pkce + rfc9396_rar + rfc9449_dpop",
+        child_agent: {
+          id: claims.client_id,
+          scope: folderScope,
+          authorised: authStatus,
+          token: claims.jti,
+          time: `ttl=${claims.exp - claims.iat}s (attenuated <= 3m)`,
+          type_of_agent: "child",
+          awake: `gemini-2.5-flash (child awakened by parent ${claims.act?.sub || "agent:invoice-assistant"})`,
+          reason: reasons,
+          authorised_flow: "oauth2.1 + rfc8693_token_exchange (nested act)",
+          dpop_cnf_jkt: claims.cnf?.jkt,
+        },
+      },
+    },
+  };
+}
+
 export default function CryptoInspector({ event }: Props) {
+  const [viewMode, setViewMode] = useState<"hierarchy" | "rfc_jwt">(
+    "hierarchy"
+  );
   const claims = event?.token_claims;
   const dpop = event?.dpop_claims;
   const risk = event?.risk_decision;
@@ -67,9 +151,9 @@ export default function CryptoInspector({ event }: Props) {
                   <div className="flex flex-col">
                     <span className="font-mono font-semibold">
                       {node.token_type === "parent_access"
-                        ? "🪪 Parent Access Token"
+                        ? "🪪 Parent Agent Token"
                         : node.token_type === "sub_agent_access"
-                          ? "↳ ⚙️ Sub-Agent Token (RFC 8693)"
+                          ? "↳ ⚙️ Child Sub-Agent Token (RFC 8693)"
                           : "↳ 🔄 Rotating Refresh Token"}
                     </span>
                     <span className="text-[11px] text-slate-400 font-mono">
@@ -163,18 +247,39 @@ export default function CryptoInspector({ event }: Props) {
         </div>
       )}
 
-      {/* 3. Decoded ES256 Access Token (at+jwt) & DPoP Proof (dpop+jwt) */}
+      {/* 3. User vs. Agent Differentiation & Decoded ES256 Token Inspector */}
       <div className="rounded-xl border border-[#223042] bg-[#121a24] p-4 flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-blue-400" />
+            <UserCheck className="w-4 h-4 text-blue-400" />
             <span className="font-mono text-xs uppercase tracking-wider text-blue-400">
-              Decoded OAuth 2.1 Token (at+jwt) &amp; DPoP Proof
+              User vs. Agent Identity Differentiation
             </span>
           </div>
-          <span className="font-mono text-[11px] text-emerald-400">
-            ES256 (P-256)
-          </span>
+
+          {/* Toggle between User -> Agent Hierarchy and Raw RFC 8693 JWT */}
+          <div className="flex items-center gap-1 bg-[#080d14] p-0.5 rounded-lg border border-slate-800 text-[11px] font-mono">
+            <button
+              onClick={() => setViewMode("hierarchy")}
+              className={`px-2 py-1 rounded ${
+                viewMode === "hierarchy"
+                  ? "bg-blue-600 text-white font-semibold"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              user → agent JSON
+            </button>
+            <button
+              onClick={() => setViewMode("rfc_jwt")}
+              className={`px-2 py-1 rounded ${
+                viewMode === "rfc_jwt"
+                  ? "bg-blue-600 text-white font-semibold"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              RFC 8693 at+jwt
+            </button>
+          </div>
         </div>
 
         {!claims ? (
@@ -182,8 +287,29 @@ export default function CryptoInspector({ event }: Props) {
             No token present at this step. Agent has zero standing privileges
             until Step 9.
           </p>
+        ) : viewMode === "hierarchy" ? (
+          <>
+            <p className="text-[11px] text-slate-400">
+              Unlike traditional OAuth that flattens identity into the human
+              user, our platform nests{" "}
+              <code className="text-blue-300">
+                user → parent agent → child sub-agent
+              </code>{" "}
+              with distinct scopes, TTLs, and LLM lineage:
+            </p>
+            <pre className="rounded-lg bg-[#080d14] border border-slate-800 p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed">
+              {JSON.stringify(buildHierarchyView(claims, event), null, 2)}
+            </pre>
+          </>
         ) : (
           <>
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1">
+                <KeyRound className="w-3 h-3 text-blue-400" />
+                Standard IETF OAuth 2.1 + RFC 8693 + RFC 9396 Payload
+              </span>
+              <span className="text-emerald-400">alg: ES256</span>
+            </div>
             <pre className="rounded-lg bg-[#080d14] border border-slate-800 p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed">
               {JSON.stringify(claims, null, 2)}
             </pre>
