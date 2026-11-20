@@ -128,6 +128,7 @@ const INITIAL_FLOW_CARDS: FlowCardItem[] = [
 interface Props {
   activeSection: string;
   organizationName: string;
+  userEmail: string;
   onCreateOrganization: (orgName: string, domain: string) => void;
   agentCount: number;
   onAgentAutoRegistered: () => void;
@@ -136,6 +137,7 @@ interface Props {
 export default function CiampControlGallery({
   activeSection,
   organizationName,
+  userEmail,
   onCreateOrganization,
   agentCount,
   onAgentAutoRegistered,
@@ -170,7 +172,7 @@ export default function CiampControlGallery({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             client_name: dcrAgentName,
-            owner_user: "user:priya@acme.in",
+            owner_user: "user:" + userEmail,
             scope: "crm.read crm.leads.write invoices.read",
             model_id: "gemini-2.5-flash",
             crm_integration: "Salesforce Enterprise CRM",
@@ -214,7 +216,7 @@ export default function CiampControlGallery({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             metadata_url: cimdUrl,
-            owner_user: "user:priya@acme.in",
+            owner_user: "user:" + userEmail,
             crm_target: "Salesforce + HubSpot CRM Connector",
           }),
         });
@@ -401,6 +403,36 @@ export default function CiampControlGallery({
             Salesforce, Invoices, NEFT, SecOps
           </span>
         </div>
+      </div>
+
+      {/* Connect Your Live Gemini / Claude / CLI Agent Banner */}
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/70 p-5 shadow-sm space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-blue-700 font-bold">
+              Connect Your Real Gemini / Claude / CLI Agent
+            </span>
+            <h3 className="text-base font-bold text-slate-900">
+              Run Your Own Agent Against This Server &amp; Approve Consent Live on
+              This Screen
+            </h3>
+          </div>
+          <span className="text-xs font-mono bg-white text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200 font-semibold">
+            Server: {GO_API_BASE}
+          </span>
+        </div>
+        <p className="text-xs text-slate-600">
+          Run this single command in your terminal. It generates an in-memory{" "}
+          <code>ES256 DPoP</code> keypair, auto-registers your agent via{" "}
+          <code>RFC 7591 DCR</code>, pops up a{" "}
+          <b>Live Consent Approval Modal right here in your dashboard</b>, waits
+          for your click, exchanges a child sub-agent token via{" "}
+          <code>RFC 8693</code>, and calls the Gateway:
+        </p>
+        <pre className="rounded-xl bg-slate-900 text-emerald-300 p-3.5 text-xs font-mono overflow-x-auto select-all">
+{`cd /Users/ajaykumarpagidipally/Documents/agentic_identity/agent-identity-backend
+go run ./cmd/my-agent --user="${userEmail}" --agent="My Claude / Gemini Agent" --model="claude-opus-4.7"`}
+        </pre>
       </div>
 
       {/* Zero-Touch Auto-Onboarding Quick Tester (DCR & CAMD / CRM Flow) */}

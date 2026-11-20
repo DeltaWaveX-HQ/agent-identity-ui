@@ -73,23 +73,27 @@ const DEFAULT_AGENTS: RegisteredAgentItem[] = [
 
 export default function AgentDirectory({
   onLaunchSandboxWithAgent,
+  userEmail,
 }: {
   onLaunchSandboxWithAgent?: (agentId: string) => void;
+  userEmail?: string;
 }) {
-  const [agents, setAgents] = useState<RegisteredAgentItem[]>(DEFAULT_AGENTS);
+  const [agents, setAgents] = useState<RegisteredAgentItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // New Agent Form State
-  const [name, setName] = useState("Customer Support Triage Agent");
-  const [agentId, setAgentId] = useState("agent:support-triage");
-  const [owner, setOwner] = useState("user:priya@acme.in");
+  const [name, setName] = useState("My Claude / Gemini Agent");
+  const [agentId, setAgentId] = useState("agent:my-assistant");
+  const [owner, setOwner] = useState(
+    userEmail ? `user:${userEmail}` : "user:ajay@deltawavex.in"
+  );
   const [parentAgent, setParentAgent] = useState("");
   const [spiffeId, setSpiffeId] = useState(
-    "spiffe://acme.in/ns/prod/sa/support-triage"
+    "spiffe://deltawavex.in/ns/prod/sa/my-assistant"
   );
   const [framework, setFramework] = useState(
-    "Google ADK / Gemini 2.5 Flash + MCP"
+    "Claude Code / Gemini CLI / MCP Client"
   );
   const [modelId, setModelId] = useState("gemini-2.5-flash");
   const [scopes, setScopes] = useState("crm.read, invoices.read");
@@ -101,7 +105,7 @@ export default function AgentDirectory({
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setAgents(data);
         }
       }
@@ -336,9 +340,33 @@ export default function AgentDirectory({
         </div>
       )}
 
-      {/* Agent Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agents.map((ag) => (
+      {/* Empty State with Live Terminal Command when 0 agents are registered */}
+      {agents.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-700 bg-[#121a24] p-8 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 mx-auto">
+            <Bot className="w-6 h-6" />
+          </div>
+          <div className="max-w-lg mx-auto space-y-1">
+            <h3 className="text-base font-bold text-white">
+              0 Agents Registered Yet — Connect Your First Real Agent!
+            </h3>
+            <p className="text-xs text-slate-400">
+              Your organization starts completely clean with no fake demo data.
+              Run the real Go Agent CLI below in your terminal (or use the DCR /
+              CAMD onboarding tab) to watch your agent register, pop up a live
+              consent prompt on your screen, and execute calls through the
+              gateway:
+            </p>
+          </div>
+          <pre className="max-w-2xl mx-auto text-left rounded-xl bg-[#080d14] border border-slate-800 p-4 text-xs font-mono text-emerald-300 overflow-x-auto">
+{`cd /Users/ajaykumarpagidipally/Documents/agentic_identity/agent-identity-backend
+go run ./cmd/my-agent --user="${userEmail || "ajay@deltawavex.in"}" --agent="My Claude / Gemini Agent" --model="claude-opus-4.7"`}
+          </pre>
+        </div>
+      ) : (
+        /* Agent Cards Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {agents.map((ag) => (
           <div
             key={ag.agent_id}
             className={`rounded-xl border p-4 flex flex-col justify-between gap-3 ${
@@ -440,6 +468,7 @@ export default function AgentDirectory({
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

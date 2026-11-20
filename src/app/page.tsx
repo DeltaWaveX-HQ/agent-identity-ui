@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import AuthScreen, {
+  AuthenticatedUser,
+  AuthenticatedOrg,
+} from "../components/AuthScreen";
 import CiampControlGallery from "../components/CiampControlGallery";
 import CommandCenter from "../components/CommandCenter";
 import AgentDirectory from "../components/AgentDirectory";
@@ -9,6 +13,7 @@ import PolicyAndAuditConsole from "../components/PolicyAndAuditConsole";
 import RedTeamBenchmark from "../components/RedTeamBenchmark";
 import BlueprintExplorer from "../components/BlueprintExplorer";
 import { GO_API_BASE } from "../lib/api";
+import { PhonePrompt, TelemetryEvent } from "../lib/types";
 import {
   Rocket,
   Layers,
@@ -26,53 +31,11 @@ import {
   PanelLeftOpen,
   Building2,
   CheckCircle2,
+  LogOut,
+  Trash2,
+  BellRing,
+  XCircle,
 } from "lucide-react";
-
-interface OrgTenant {
-  id: string;
-  name: string;
-  domain: string;
-  env: string;
-}
-
-const INITIAL_ORGS: OrgTenant[] = [
-  {
-    id: "org_ajay_test",
-    name: "ajay-test",
-    domain: "ajay-test.agentidentity.in",
-    env: "Production",
-  },
-  {
-    id: "org_acme_fintech",
-    name: "acme-fintech-india",
-    domain: "acme.in",
-    env: "Production",
-  },
-  {
-    id: "org_deltawavex",
-    name: "deltawavex-hq",
-    domain: "deltawavex.io",
-    env: "Staging",
-  },
-];
-
-const PERSONAS = [
-  {
-    email: "priya@acme.in",
-    name: "Priya Sharma",
-    role: "Finance Manager",
-  },
-  {
-    email: "admin@acme.in",
-    name: "Ajay Kumar (Org Owner)",
-    role: "CISO / IAM Architect",
-  },
-  {
-    email: "rahul@acme.in",
-    name: "Rahul Verma",
-    role: "AI Platform Engineer",
-  },
-];
 
 type NavView =
   | "getting_started"
@@ -86,16 +49,21 @@ type NavView =
   | "architecture";
 
 export default function HomePage() {
-  const [orgs, setOrgs] = useState<OrgTenant[]>(INITIAL_ORGS);
-  const [activeOrg, setActiveOrg] = useState<OrgTenant>(INITIAL_ORGS[0]);
-  const [activePersona, setActivePersona] = useState(PERSONAS[1]);
+  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
+    null
+  );
+  const [orgs, setOrgs] = useState<AuthenticatedOrg[]>([]);
+  const [activeOrg, setActiveOrg] = useState<AuthenticatedOrg | null>(null);
   const [activeView, setActiveView] = useState<NavView>("attack_protection");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [agentCount, setAgentCount] = useState<number>(3);
+  const [agentCount, setAgentCount] = useState<number>(0);
   const [sandboxAgentId, setSandboxAgentId] = useState<string>(
-    "agent:invoice-assistant"
+    "agent:my-assistant"
   );
+
+  // Global Real-Time Consent / CIBA Notification Modal (pops up on ANY tab when an external Claude/Gemini agent connects!)
+  const [globalPrompt, setGlobalPrompt] = useState<PhonePrompt | null>(null);
 
   // Accordion groups matching screenshot
   const [securityOpen, setSecurityOpen] = useState(true);
@@ -112,27 +80,157 @@ export default function HomePage() {
         if (Array.isArray(list)) setAgentCount(list.length);
       }
     } catch {
-      // keep count
+      // ignore
     }
   }
 
+  // Restore session from localStorage if available
   useEffect(() => {
-    refreshAgentCount();
+    const saved = localStorage.getItem("agent_identity_session");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.user && parsed.org) {
+          setCurrentUser(parsed.user);
+          setActiveOrg(parsed.org);
+          setOrgs([parsed.org]);
+        }
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
-  function handleCreateOrganization(orgName: string, domain: string) {
+  // Global SSE Listener so when the user runs `go run ./cmd/my-agent` in their terminal,
+  // the agent count updates and the Live Consent Approval Modal pops up immediately on their screen!
+  useEffect(() => {
+    if (!currentUser) return;
+    refreshAgentCount();
+
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`${GO_API_BASE}/api/v1/events/stream`);
+      es.onmessage = (msg) => {
+        try {
+          const ev: TelemetryEvent = JSON.parse(msg.data);
+          refreshAgentCount();
+          if (ev.phone_prompt) {
+            setGlobalPrompt(
+              ev.phone_prompt.type === "dismiss" ? null : ev.phone_prompt
+            );
+          }
+        } catch {
+          // ignore
+        }
+      };
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      if (es) es.close();
+    };
+  }, [currentUser]);
+
+  async function handleGlobalApproveConsent(consentId: string) {
+    setGlobalPrompt(null);
+    await fetch(`${GO_API_BASE}/api/v1/oauth/consent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        consent_id: consentId,
+        actions: globalPrompt?.requested_actions || ["read"],
+      }),
+    });
+    refreshAgentCount();
+  }
+
+  async function handleGlobalDenyConsent(consentId: string) {
+    setGlobalPrompt(null);
+    await fetch(`${GO_API_BASE}/api/v1/consents/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consent_id: consentId }),
+    });
+  }
+
+  async function handleGlobalResolveCiba(authReqId: string, approved: boolean) {
+    setGlobalPrompt(null);
+    await fetch(`${GO_API_BASE}/api/v1/oauth/ciba-resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auth_req_id: authReqId, approved }),
+    });
+  }
+
+  async function handleCreateOrganization(orgName: string, domain: string) {
+    try {
+      const res = await fetch(`${GO_API_BASE}/api/v1/orgs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_email: currentUser?.email || "",
+          org_name: orgName,
+          org_domain: domain,
+        }),
+      });
+      if (res.ok) {
+        const created: AuthenticatedOrg = await res.json();
+        setOrgs((prev) => [created, ...prev]);
+        setActiveOrg(created);
+        setAgentCount(0);
+        return;
+      }
+    } catch {
+      // fallback
+    }
     const slug = orgName.toLowerCase().replace(/\s+/g, "-");
-    const created: OrgTenant = {
+    const created: AuthenticatedOrg = {
       id: "org_" + slug,
-      name: slug,
+      name: orgName,
+      slug,
       domain,
-      env: "Production",
+      owner_email: currentUser?.email || "",
     };
     setOrgs((prev) => [created, ...prev]);
     setActiveOrg(created);
+    setAgentCount(0);
   }
 
-  // Determine whether the active view is one of the light-mode CIAM views or the dark-mode technical instrument views
+  async function handleClearWorkspace() {
+    try {
+      await fetch(`${GO_API_BASE}/api/v1/workspace/reset`, { method: "POST" });
+    } catch {
+      // ignore
+    }
+    setAgentCount(0);
+    setGlobalPrompt(null);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("agent_identity_session");
+    setCurrentUser(null);
+    setActiveOrg(null);
+  }
+
+  // 1. If not logged in, show the Real Login / Create Organization Screen!
+  if (!currentUser || !activeOrg) {
+    return (
+      <AuthScreen
+        onSuccess={(user, org, token) => {
+          setCurrentUser(user);
+          setActiveOrg(org);
+          setOrgs([org]);
+          setAgentCount(0);
+          localStorage.setItem(
+            "agent_identity_session",
+            JSON.stringify({ user, org, token })
+          );
+        }}
+      />
+    );
+  }
+
   const isLightGalleryView =
     activeView === "attack_protection" ||
     activeView === "camd_dcr_crm" ||
@@ -140,6 +238,115 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex bg-[#F8FAFC] text-slate-900 font-sans">
+      {/* GLOBAL REAL-TIME CONSENT / CIBA POPUP OVERLAY (Fires whenever your terminal/Claude/Gemini agent calls /oauth/authorize) */}
+      {globalPrompt && globalPrompt.type !== "dismiss" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border-2 border-blue-500 bg-white text-slate-900 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-blue-600">
+                <BellRing className="w-5 h-5 animate-bounce" />
+                <span className="font-mono text-xs font-bold uppercase tracking-wider">
+                  {globalPrompt.type === "rar_consent"
+                    ? "Incoming Live Agent Consent Request (RFC 9396 RAR)"
+                    : "Incoming OpenID CIBA Step-Up Push"}
+                </span>
+              </div>
+              <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 font-semibold">
+                Risk: {globalPrompt.risk_score?.toFixed(2) || "0.12"}
+              </span>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">
+                Agent <code className="text-blue-600">{globalPrompt.agent_id}</code>{" "}
+                is requesting access
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Accountable Principal: <b>{currentUser.email}</b> · Organization:{" "}
+                <b>{activeOrg.name}</b>
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-xs space-y-2">
+              <div>
+                <span className="text-slate-500 font-medium">Stated Task:</span>{" "}
+                <span className="text-slate-900 font-semibold">
+                  &ldquo;{globalPrompt.task_description}&rdquo;
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium">
+                  Target Resource:
+                </span>{" "}
+                <code className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">
+                  {globalPrompt.requested_resource}
+                </code>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium">
+                  Requested Actions:
+                </span>{" "}
+                <code className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded font-mono">
+                  {globalPrompt.requested_actions?.join(", ") || "read"}
+                </code>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium">
+                  Token Binding:
+                </span>{" "}
+                <span className="text-slate-800">
+                  {globalPrompt.ttl_display || "5 minutes · ES256 DPoP Bound"}
+                </span>
+              </div>
+            </div>
+
+            {globalPrompt.type === "rar_consent" ? (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  onClick={() =>
+                    handleGlobalDenyConsent(globalPrompt.prompt_id || "")
+                  }
+                  className="py-2.5 px-4 rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Deny Request
+                </button>
+                <button
+                  onClick={() =>
+                    handleGlobalApproveConsent(globalPrompt.prompt_id || "")
+                  }
+                  className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20 transition"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Approve Pass
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  onClick={() =>
+                    handleGlobalResolveCiba(globalPrompt.prompt_id || "", false)
+                  }
+                  className="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Deny &amp; Revoke
+                </button>
+                <button
+                  onClick={() =>
+                    handleGlobalResolveCiba(globalPrompt.prompt_id || "", true)
+                  }
+                  className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Approve CIBA Step-Up
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* LEFT SIDEBAR — Exact Match to Uploaded CIAM Platform Screenshot */}
       <aside
         className={`${
@@ -147,7 +354,7 @@ export default function HomePage() {
         } shrink-0 border-r border-slate-200 bg-white flex flex-col justify-between transition-all duration-200 sticky top-0 h-screen z-30 select-none`}
       >
         <div className="p-3.5 space-y-3 overflow-y-auto">
-          {/* Top Organization Switcher Header (`ajay-test` + gear icon) */}
+          {/* Top Organization Switcher Header */}
           <div className="flex items-center justify-between gap-2 px-1">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
@@ -164,7 +371,7 @@ export default function HomePage() {
                 >
                   {orgs.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.name}
+                      {o.slug || o.name}
                     </option>
                   ))}
                 </select>
@@ -199,7 +406,6 @@ export default function HomePage() {
 
           {/* Primary Navigation Tree */}
           <nav className="space-y-1 text-[13px]">
-            {/* Getting Started */}
             <button
               onClick={() => setActiveView("getting_started")}
               className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg font-medium transition ${
@@ -212,7 +418,6 @@ export default function HomePage() {
               {!sidebarCollapsed && <span>Getting Started</span>}
             </button>
 
-            {/* Applications (AI Agent Directory) */}
             <button
               onClick={() => setActiveView("applications")}
               className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg font-medium transition ${
@@ -232,7 +437,6 @@ export default function HomePage() {
               )}
             </button>
 
-            {/* Authentication (DCR & CAMD Auto-Registration) */}
             <button
               onClick={() => setActiveView("camd_dcr_crm")}
               className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg font-medium transition ${
@@ -293,7 +497,7 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Security Group (Highlighted with Blue Accent Line exactly like Screenshot!) */}
+            {/* Security Group */}
             <div>
               <button
                 onClick={() => setSecurityOpen(!securityOpen)}
@@ -346,7 +550,7 @@ export default function HomePage() {
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    Risk-Based Authentication
+                    Live Agent Telemetry Trace
                   </button>
                   <button
                     onClick={() => setActiveView("policies_siem")}
@@ -399,7 +603,7 @@ export default function HomePage() {
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    Live 17-Step Agent Trace
+                    Live Agent Trace &amp; CIBA
                   </button>
                   <button
                     onClick={() => setActiveView("architecture")}
@@ -417,8 +621,8 @@ export default function HomePage() {
           </nav>
         </div>
 
-        {/* Bottom Docs / Profile / Collapse Section (Matches Screenshot Footer) */}
-        <div className="p-3.5 border-t border-slate-200 space-y-1.5 text-xs text-slate-600">
+        {/* Bottom Docs / Authenticated User Profile / Sign Out */}
+        <div className="p-3.5 border-t border-slate-200 space-y-2 text-xs text-slate-600">
           <a
             href={`${GO_API_BASE}/.well-known/openid-configuration`}
             target="_blank"
@@ -433,27 +637,23 @@ export default function HomePage() {
           </a>
 
           {!sidebarCollapsed && (
-            <div className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-800">
-                <User className="w-3.5 h-3.5 text-blue-600" />
-                <span>Profile Principal</span>
+            <div className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-900 truncate">
+                  <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="truncate">{currentUser.name}</span>
+                </span>
+                <button
+                  onClick={handleLogout}
+                  title="Sign out"
+                  className="text-rose-600 hover:text-rose-800 p-0.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <select
-                value={activePersona.email}
-                onChange={(e) => {
-                  const found = PERSONAS.find(
-                    (p) => p.email === e.target.value
-                  );
-                  if (found) setActivePersona(found);
-                }}
-                className="w-full bg-white border border-slate-200 rounded px-1.5 py-1 text-[11px] text-slate-700 focus:outline-none"
-              >
-                {PERSONAS.map((p) => (
-                  <option key={p.email} value={p.email}>
-                    {p.name} ({p.role})
-                  </option>
-                ))}
-              </select>
+              <div className="text-[10px] font-mono text-slate-500 truncate">
+                {currentUser.email}
+              </div>
             </div>
           )}
 
@@ -478,18 +678,26 @@ export default function HomePage() {
         {/* Top Utility Breadcrumb Bar */}
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="font-semibold text-slate-800">
-              {activeOrg.name}
+            <span className="font-bold text-slate-900">
+              {activeOrg.slug || activeOrg.name}
             </span>
             <span>/</span>
             <span className="font-mono text-slate-500">{activeOrg.domain}</span>
             <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
               <CheckCircle2 className="w-3 h-3" />
-              Go Auth Server + DPoP Gateway Live
+              Listening for Your Live Agents (:8080)
             </span>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleClearWorkspace}
+              title="Wipe all agents & logs for a fresh test"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Reset Workspace (0 Agents)
+            </button>
             <button
               onClick={() => setActiveView("attack_protection")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
@@ -501,6 +709,16 @@ export default function HomePage() {
               CIAM Flows &amp; DCR
             </button>
             <button
+              onClick={() => setActiveView("applications")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === "applications"
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              My Agents ({agentCount})
+            </button>
+            <button
               onClick={() => setActiveView("runtime_trace")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 activeView === "runtime_trace"
@@ -508,17 +726,7 @@ export default function HomePage() {
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
-              Live 17-Step Trace
-            </button>
-            <button
-              onClick={() => setActiveView("oauth_sandbox")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeView === "oauth_sandbox"
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
-            >
-              OAuth 2.1 Sandbox
+              Live Agent Trace
             </button>
           </div>
         </header>
@@ -537,11 +745,11 @@ export default function HomePage() {
               activeView === "getting_started") && (
               <CiampControlGallery
                 activeSection={activeView}
-                organizationName={activeOrg.name}
+                organizationName={activeOrg.slug || activeOrg.name}
+                userEmail={currentUser.email}
                 onCreateOrganization={handleCreateOrganization}
                 agentCount={agentCount}
                 onAgentAutoRegistered={() => {
-                  setAgentCount((c) => c + 1);
                   refreshAgentCount();
                 }}
               />
@@ -549,6 +757,7 @@ export default function HomePage() {
 
             {activeView === "applications" && (
               <AgentDirectory
+                userEmail={currentUser.email}
                 onLaunchSandboxWithAgent={(id) => {
                   setSandboxAgentId(id);
                   setActiveView("oauth_sandbox");

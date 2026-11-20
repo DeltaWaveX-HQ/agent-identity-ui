@@ -59,12 +59,7 @@ export default function CommandCenter() {
             const ev: TelemetryEvent = JSON.parse(msg.data);
             setEvents((prev) => {
               const exists = prev.some((p) => p.id === ev.id);
-              const next =
-                ev.step_number === 1
-                  ? [ev]
-                  : exists
-                    ? prev
-                    : [...prev, ev];
+              const next = exists ? prev : [...prev, ev];
               setSelectedIndex(next.length - 1);
               return next;
             });
@@ -80,7 +75,6 @@ export default function CommandCenter() {
       } catch {
         if (!cancelled) {
           setGoBackendLive(false);
-          runClientSideSimulation("act1_normal");
         }
       }
     }
