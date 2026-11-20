@@ -37,9 +37,10 @@ interface AuthScreenProps {
     org: AuthenticatedOrg,
     token: string
   ) => void;
+  onBackToHome?: () => void;
 }
 
-export default function AuthScreen({ onSuccess }: AuthScreenProps) {
+export default function AuthScreen({ onSuccess, onBackToHome }: AuthScreenProps) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("Ajay Sharma");
   const [orgName, setOrgName] = useState("DeltaWaveX Org");
@@ -122,6 +123,15 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
               OAuth 2.1 / DPoP · :8080
             </span>
           </div>
+          {onBackToHome && (
+            <button
+              type="button"
+              onClick={onBackToHome}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200 transition-colors"
+            >
+              ← Back to Home
+            </button>
+          )}
           <a
             href="http://localhost:8080/.well-known/oauth-authorization-server"
             target="_blank"

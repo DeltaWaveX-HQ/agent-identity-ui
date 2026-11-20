@@ -5,6 +5,7 @@ import AuthScreen, {
   AuthenticatedOrg,
   AuthenticatedUser,
 } from "../components/AuthScreen";
+import LandingPage from "../components/LandingPage";
 import DashboardView from "../components/stitch/DashboardView";
 import ConsentsAgentsView from "../components/stitch/ConsentsAgentsView";
 import SetupFlowView from "../components/stitch/SetupFlowView";
@@ -54,6 +55,7 @@ export default function HomePage() {
     null
   );
   const [activeOrg, setActiveOrg] = useState<AuthenticatedOrg | null>(null);
+  const [showSignIn, setShowSignIn] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab>("consents-agents");
 
   // Live backend state (:8080)
@@ -198,6 +200,7 @@ export default function HomePage() {
     localStorage.removeItem("agent_identity_session");
     setCurrentUser(null);
     setActiveOrg(null);
+    setShowSignIn(false);
   }
 
   function handleToggleFlow(key: keyof OrgFlowConfig) {
@@ -205,11 +208,16 @@ export default function HomePage() {
   }
 
   if (!currentUser || !activeOrg) {
+    if (!showSignIn) {
+      return <LandingPage onTryNow={() => setShowSignIn(true)} />;
+    }
     return (
       <AuthScreen
+        onBackToHome={() => setShowSignIn(false)}
         onSuccess={(user, org, token) => {
           setCurrentUser(user);
           setActiveOrg(org);
+          setShowSignIn(false);
           localStorage.setItem(
             "agent_identity_session",
             JSON.stringify({ user, org, token })
