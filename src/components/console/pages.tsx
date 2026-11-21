@@ -17,6 +17,7 @@ import {
   relTime,
   shortUser,
 } from "../../lib/console-api";
+import { GO_API_BASE } from "../../lib/api";
 import {
   ActionChips,
   Button,
@@ -867,6 +868,58 @@ function SubAgentHookCard({ refreshKey }: { refreshKey: number }) {
   );
 }
 
+/** Gemini CLI connects like any OAuth MCP client; Google ADK agents create sub-agents by token exchange. */
+function GeminiCard({ mcp }: { mcp: string }) {
+  const gw = mcp.replace(/\/mcp$/, "");
+  const adk = `# pip install google-adk   (agent_identity.py: examples/python in the backend repo)
+from agent_identity import exchange_for_sub_agent
+from google.adk.agents import Agent
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StreamableHTTPConnectionParams
+
+# A sub-agent of your connected agent: its own identity, read-only, 10 minutes.
+# You approve it once in this console (Approvals).
+sub = exchange_for_sub_agent("${GO_API_BASE}", PARENT_TOKEN, "researcher", ["read"], ttl_seconds=600)
+
+researcher = Agent(
+    name="researcher",
+    model="gemini-2.5-flash",
+    tools=[MCPToolset(connection_params=StreamableHTTPConnectionParams(
+        url="${mcp}", headers={"Authorization": "Bearer " + sub["access_token"]}))],
+)`;
+  return (
+    <Card title="Gemini">
+      <ol className="space-y-4 text-sm text-slate-700">
+        <li>
+          <div className="mb-2">
+            1. <b>Gemini CLI</b>: add the gateway (all folders):
+          </div>
+          <CopyBlock text={`gemini mcp add -s user -t http agentid-gateway ${mcp}`} />
+        </li>
+        <li>
+          <div className="mb-2">2. Start Gemini CLI and sign in to the gateway. Your browser opens our consent screen:</div>
+          <CopyBlock text="/mcp auth agentid-gateway" />
+        </li>
+        <li>
+          3. Check it with <code className="rounded bg-slate-100 px-1">/mcp</code>, then ask, for example, &ldquo;list my bank accounts&rdquo;. Every call is checked here; risky ones appear in
+          Approvals.
+        </li>
+        <li>
+          <div className="mb-2">
+            4. A <b>sub-agent</b> for Gemini CLI connects to its own address and gets 5 min, 10 min or 1 hour:
+          </div>
+          <CopyBlock text={`gemini mcp add -s user -t http agentid-researcher ${gw}/mcp/sub/researcher`} />
+        </li>
+        <li>
+          <div className="mb-2">
+            5. <b>Google ADK</b> (Python agents on Gemini): a parent agent creates a sub-agent with its own identity through token exchange:
+          </div>
+          <CopyBlock text={adk} />
+        </li>
+      </ol>
+    </Card>
+  );
+}
+
 export function ConnectPage({ refreshKey }: { refreshKey: number }) {
   const { data, error } = useData<Connections>(consoleApi.connections, refreshKey);
   if (!data) return <Loading error={error} />;
@@ -887,13 +940,14 @@ export function ConnectPage({ refreshKey }: { refreshKey: number }) {
             </ol>
           </Card>
           <Card title="Sub-agent">
-            <p className="mb-3 text-sm text-slate-600">A sub-agent connects to its own address. On its consent screen you pick the parent agent, a subset of the parent's permissions, and 5 minutes, 10 minutes or 1 hour.</p>
+            <p className="mb-3 text-sm text-slate-600">A sub-agent connects to its own address. After you sign in on its consent screen, it is attached to your connected agent; you choose a subset of that agent's permissions and 5 minutes, 10 minutes or 1 hour.</p>
             <CopyBlock text={`claude mcp add --transport http -s user agent-gw-researcher ${mcp}/sub/researcher`} />
           </Card>
           <SubAgentHookCard refreshKey={refreshKey} />
+          <GeminiCard mcp={mcp} />
           <Card title="Other MCP clients">
             <p className="text-sm text-slate-600">
-              Cursor, Gemini CLI, MCPJam and other clients that support remote MCP with OAuth: use <code className="rounded bg-slate-100 px-1">{mcp}</code> with the HTTP transport. ChatGPT and Claude.ai connectors need a public HTTPS address, which comes with deployment.
+              Cursor, MCPJam, VS Code and other clients that support remote MCP with OAuth: use <code className="rounded bg-slate-100 px-1">{mcp}</code> with the HTTP (streamable) transport and OAuth; no client ID is needed.
             </p>
           </Card>
         </div>

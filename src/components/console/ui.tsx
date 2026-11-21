@@ -198,7 +198,7 @@ export function CopyBlock({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="group relative rounded-lg bg-slate-900 px-4 py-3 pr-16">
-      <code className="block font-mono text-xs text-slate-100 break-all">{text}</code>
+      <code className="block whitespace-pre-wrap font-mono text-xs text-slate-100 break-all">{text}</code>
       <button
         type="button"
         onClick={() => {
